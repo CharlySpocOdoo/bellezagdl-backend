@@ -4,7 +4,7 @@ from sqlalchemy import (
     Column, String, Boolean, Integer, Numeric,
     DateTime, ForeignKey, Text
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy import Enum as SAEnum
 
@@ -68,6 +68,7 @@ class Product(Base):
     source            = Column(String(50), nullable=True)
     last_synced_at    = Column(DateTime, nullable=True)
     source_updated_at = Column(DateTime, nullable=True)
+    tags              = Column(ARRAY(String), nullable=True)
 
     category          = relationship("ProductCategory", back_populates="products")
     brand             = relationship("Brand", back_populates="products")
