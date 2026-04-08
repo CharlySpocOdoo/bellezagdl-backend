@@ -2,18 +2,14 @@ import uuid
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Boolean, Integer, Numeric,
-    DateTime, ForeignKey, Text, Enum
+    DateTime, ForeignKey, Text
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import enum
+from sqlalchemy import Enum as SAEnum
 
 from app.database import Base
-
-
-class BrandOrigin(str, enum.Enum):
-    national = "national"
-    imported = "imported"
+from app.modules.shared_enums import BrandOrigin
 
 
 class ProductCategory(Base):
@@ -43,7 +39,7 @@ class Brand(Base):
     logo_url                  = Column(Text, nullable=True)
     brand_discount_percentage = Column(Numeric(5, 2), default=0, nullable=False)
     sale_margin_percentage    = Column(Numeric(5, 2), default=50, nullable=False)
-    origin                    = Column(Enum(BrandOrigin), nullable=True)
+    origin                    = Column(SAEnum(BrandOrigin), nullable=True)
     active                    = Column(Boolean, default=True)
     external_id               = Column(String(255), nullable=True)
     source                    = Column(String(50), nullable=True)

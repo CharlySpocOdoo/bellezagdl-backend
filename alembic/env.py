@@ -5,12 +5,20 @@ from alembic import context
 from app.config import settings
 from app.database import Base
 
+# Importar shared_enums primero para registrar todos los tipos
+from app.modules import shared_enums  # noqa
+
 # Dominio Catalogo — 2B-1
-# Dominio Usuarios y Red — 2B-2
 from app.modules.catalog.models import ProductCategory, Brand, Product, ProductVariant, ProductImage  # noqa
+
+# Dominio Usuarios y Red — 2B-2
 from app.modules.auth.models import User, RefreshToken, Vendor, Client, Invitation  # noqa
-# para que Alembic los detecte automáticamente.
-# Ejemplo: from app.modules.auth.models import User
+
+# Dominio Sistema — 2B-5
+from app.modules.admin.models import DeliveryPerson, Supplier, SupplierContact, CatalogSyncLog, Notification, AuditLog  # noqa
+
+# Dominio Pedidos — 2B-3
+from app.modules.orders.models import Order, OrderItem, OrderStatusHistory, Shipment  # noqa
 
 config = context.config
 
