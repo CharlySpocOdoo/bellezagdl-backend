@@ -5,7 +5,8 @@ from alembic import context
 from app.config import settings
 from app.database import Base
 
-# Importar todos los modelos aquí cuando se creen en 2B
+# Dominio Catalogo — 2B-1
+from app.modules.catalog.models import ProductCategory, Brand, Product, ProductVariant, ProductImage  # noqa
 # para que Alembic los detecte automáticamente.
 # Ejemplo: from app.modules.auth.models import User
 
