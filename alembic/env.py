@@ -6,7 +6,9 @@ from app.config import settings
 from app.database import Base
 
 # Dominio Catalogo — 2B-1
+# Dominio Usuarios y Red — 2B-2
 from app.modules.catalog.models import ProductCategory, Brand, Product, ProductVariant, ProductImage  # noqa
+from app.modules.auth.models import User, RefreshToken, Vendor, Client, Invitation  # noqa
 # para que Alembic los detecte automáticamente.
 # Ejemplo: from app.modules.auth.models import User
 
