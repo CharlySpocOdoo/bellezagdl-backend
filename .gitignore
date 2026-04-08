@@ -1,0 +1,21 @@
+# Entorno virtual
+venv/
+
+# Variables de entorno con credenciales reales
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Alembic
+alembic/versions/*.pyc
