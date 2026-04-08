@@ -17,6 +17,9 @@ from app.modules.auth.models import User, RefreshToken, Vendor, Client, Invitati
 # Dominio Sistema — 2B-5
 from app.modules.admin.models import DeliveryPerson, Supplier, SupplierContact, CatalogSyncLog, Notification, AuditLog  # noqa
 
+# Dominio Financiero — 2B-4
+from app.modules.commissions.models import CommissionSettings, CommissionPeriod, TaxSettings  # noqa
+
 # Dominio Pedidos — 2B-3
 from app.modules.orders.models import Order, OrderItem, OrderStatusHistory, Shipment  # noqa
 
