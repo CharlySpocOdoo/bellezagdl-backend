@@ -5,6 +5,8 @@ from mangum import Mangum
 from app.config import settings
 from app.database import check_db_connection
 
+from app.modules.auth.router import router as auth_router
+from app.modules.vendors.router import router_admin as vendors_admin_router, router_vendor as vendors_router
 
 app = FastAPI(
     title="BellezaGDL API",
@@ -25,21 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.modules.auth.router import router as auth_router
 app.include_router(auth_router, prefix="/v1/auth", tags=["Auth"])
-
-# Aquí se agregan los routers conforme se construyen los módulos.
-# Ejemplo (descomentar en 2C):
-# from app.modules.auth.router import router as auth_router
-# app.include_router(auth_router, prefix="/v1/auth", tags=["Auth"])
+app.include_router(vendors_admin_router, prefix="/v1/admin/vendors", tags=["Admin - Vendedores"])
+app.include_router(vendors_router, prefix="/v1/vendors", tags=["Vendedores"])
 
 
 @app.get("/health", tags=["Sistema"])
 def health_check():
-    """
-    Verifica que la API y la base de datos estén funcionando.
-    Usado por el CI/CD para confirmar que el deploy fue exitoso.
-    """
     db_ok = check_db_connection()
     return {
         "status": "ok" if db_ok else "degraded",

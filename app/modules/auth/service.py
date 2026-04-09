@@ -211,6 +211,7 @@ def activate_vendor(db: Session, invitation_token: str, password: str) -> Tuple[
     user.password_hash = hash_password(password)
     user.active = True
     user.email_verified_at = datetime.utcnow()
+    vendor.active = True
     inv.use_count += 1
     db.commit()
     db.refresh(user)
