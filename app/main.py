@@ -25,6 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.modules.auth.router import router as auth_router
+app.include_router(auth_router, prefix="/v1/auth", tags=["Auth"])
+
 # Aquí se agregan los routers conforme se construyen los módulos.
 # Ejemplo (descomentar en 2C):
 # from app.modules.auth.router import router as auth_router
