@@ -14,16 +14,12 @@ from app.modules.auth.models import User, Vendor, Client, Invitation
 from app.modules.shared_enums import UserRole, InvitationType
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
 def generate_invitation_code(length: int = 6) -> str:
-    """Genera un codigo corto unico para el vendedor ej. JUAN42."""
     chars = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(chars) for _ in range(length))
 
 
 def generate_unique_invitation_code(db: Session) -> str:
-    """Genera un codigo de invitacion unico verificando que no exista en BD."""
     while True:
         code = generate_invitation_code()
         existing = db.query(Vendor).filter(Vendor.invitation_code == code).first()
@@ -32,7 +28,6 @@ def generate_unique_invitation_code(db: Session) -> str:
 
 
 def send_activation_email(email: str, display_name: str, activation_token: str) -> None:
-    """Envia el email de activacion al vendedor via SMTP."""
     activation_link = f"https://bellezagdl.com/activar?token={activation_token}"
 
     msg = MIMEMultipart("alternative")
@@ -80,8 +75,6 @@ BellezaGDL
         server.sendmail(settings.emails_from, email, msg.as_string())
 
 
-# ── CRUD de vendedores ────────────────────────────────────────────────────────
-
 def create_vendor(
     db: Session,
     email: str,
@@ -97,28 +90,23 @@ def create_vendor(
     workplace_type=None,
     notes: Optional[str] = None,
 ) -> Vendor:
-    """Crea un vendedor, genera tokens y envia email de activacion."""
-
-    # Verificar que el email no exista
     existing = db.query(User).filter(User.email == email.lower()).first()
     if existing:
         raise ValueError("El email ya esta registrado")
 
-    # Crear usuario inactivo
     user = User(
         email=email.lower(),
-        password_hash="",  # Se establece al activar
+        password_hash="",
         role=UserRole.vendor,
         active=False,
     )
     db.add(user)
     db.flush()
 
-    # Generar tokens
-    invitation_code = generate_unique_invitation_code(db)
-    invitation_token = secrets.token_urlsafe(32)
+    invitation_code          = generate_unique_invitation_code(db)
+    activation_token         = secrets.token_urlsafe(32)  # Para activar cuenta — uso unico, 24h
+    client_invitation_token  = secrets.token_urlsafe(32)  # Para invitar clientes — ilimitado, sin expiracion
 
-    # Crear vendor
     vendor = Vendor(
         user_id=user.id,
         display_name=display_name,
@@ -131,55 +119,62 @@ def create_vendor(
         workplace=workplace,
         workplace_type=workplace_type,
         invitation_code=invitation_code,
-        invitation_token=invitation_token,
+        invitation_token=client_invitation_token,  # El token del vendor es el de clientes
         notes=notes,
         active=False,
     )
     db.add(vendor)
     db.flush()
 
-    # Crear invitacion de activacion (expira en 24h, uso unico)
-    invitation = Invitation(
+    # Invitacion de activacion — uso unico, expira en 24h
+    activation_invitation = Invitation(
         vendor_id=vendor.id,
         created_by=created_by_id,
-        token=invitation_token,
+        token=activation_token,
         type=InvitationType.vendor_onboarding,
         email_hint=email,
         max_uses=1,
         use_count=0,
         expires_at=datetime.utcnow() + timedelta(hours=24),
     )
-    db.add(invitation)
+    db.add(activation_invitation)
+
+    # Invitacion para clientes — ilimitada, sin expiracion
+    client_invitation = Invitation(
+        vendor_id=vendor.id,
+        created_by=created_by_id,
+        token=client_invitation_token,
+        type=InvitationType.client_signup,
+        max_uses=None,
+        use_count=0,
+        expires_at=None,
+    )
+    db.add(client_invitation)
+
     db.commit()
     db.refresh(vendor)
 
-    # Enviar email de activacion
     try:
-        send_activation_email(email, display_name, invitation_token)
+        send_activation_email(email, display_name, activation_token)
     except Exception as e:
         print(f"Error enviando email: {e}")
-        # No falla si el email no se pudo enviar — el admin puede reenviar
 
     return vendor
 
 
 def get_vendor_by_id(db: Session, vendor_id: UUID) -> Optional[Vendor]:
-    """Obtiene un vendedor por su ID."""
     return db.query(Vendor).filter(Vendor.id == vendor_id).first()
 
 
 def get_vendor_by_user_id(db: Session, user_id: UUID) -> Optional[Vendor]:
-    """Obtiene el vendor vinculado a un usuario."""
     return db.query(Vendor).filter(Vendor.user_id == user_id).first()
 
 
 def get_all_vendors(db: Session) -> List[Vendor]:
-    """Lista todos los vendedores."""
     return db.query(Vendor).order_by(Vendor.display_name).all()
 
 
 def update_vendor(db: Session, vendor_id: UUID, **kwargs) -> Optional[Vendor]:
-    """Actualiza los campos de un vendedor."""
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         return None
@@ -192,34 +187,10 @@ def update_vendor(db: Session, vendor_id: UUID, **kwargs) -> Optional[Vendor]:
 
 
 def get_vendor_clients(db: Session, vendor_id: UUID) -> List[Client]:
-    """Lista los clientes de un vendedor."""
     return db.query(Client).filter(
         Client.vendor_id == vendor_id,
     ).order_by(Client.first_name).all()
 
 
 def get_invitation_link(vendor: Vendor) -> str:
-    """Construye el link de invitacion del vendedor para clientes."""
     return f"https://bellezagdl.com/registro?token={vendor.invitation_token}"
-
-
-def get_or_create_client_invitation(db: Session, vendor: Vendor, created_by_id: UUID) -> Invitation:
-    """Obtiene o crea la invitacion permanente del vendedor para clientes."""
-    existing = db.query(Invitation).filter(
-        Invitation.vendor_id == vendor.id,
-        Invitation.type == InvitationType.client_signup,
-    ).first()
-    if existing:
-        return existing
-    invitation = Invitation(
-        vendor_id=vendor.id,
-        created_by=created_by_id,
-        token=vendor.invitation_token,
-        type=InvitationType.client_signup,
-        max_uses=None,  # Ilimitado
-        use_count=0,
-        expires_at=None,  # Sin expiracion
-    )
-    db.add(invitation)
-    db.commit()
-    return invitation
