@@ -9,6 +9,7 @@ from app.modules.auth.router import router as auth_router
 from app.modules.vendors.router import router_admin as vendors_admin_router, router_vendor as vendors_router
 from app.modules.catalog.router import router as catalog_router
 from app.modules.orders.router import router as orders_router, router_admin as orders_admin_router
+from app.modules.delivery.router import router_delivery, router_shipments
 
 app = FastAPI(
     title="BellezaGDL API",
@@ -35,6 +36,8 @@ app.include_router(vendors_router, prefix="/v1/vendors", tags=["Vendedores"])
 app.include_router(catalog_router, prefix="/v1/catalog", tags=["Catalogo"])
 app.include_router(orders_router, prefix="/v1/orders", tags=["Pedidos"])
 app.include_router(orders_admin_router, prefix="/v1/admin/orders", tags=["Admin - Pedidos"])
+app.include_router(router_delivery, prefix="/v1/delivery-persons", tags=["Repartidores"])
+app.include_router(router_shipments, prefix="/v1/admin/shipments", tags=["Admin - Shipments"])
 
 
 @app.get("/health", tags=["Sistema"])
