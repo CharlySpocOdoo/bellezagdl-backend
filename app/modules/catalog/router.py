@@ -189,3 +189,32 @@ def sync_catalog(
     """
     result = service.sync_catalog_mock(db, current_user.id)
     return SyncResultResponse(**result)
+
+
+@router.get("/sync-logs")
+def get_sync_logs(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Historial de sincronizaciones del catalogo con Odoo."""
+    from app.modules.admin.models import CatalogSyncLog
+    logs = db.query(CatalogSyncLog).order_by(
+        CatalogSyncLog.started_at.desc()
+    ).limit(50).all()
+
+    return [
+        {
+            "id": str(log.id),
+            "source": log.source,
+            "triggered_by": log.triggered_by,
+            "status": log.status.value if log.status else None,
+            "products_scanned": log.products_scanned,
+            "products_updated": log.products_updated,
+            "images_uploaded": log.images_uploaded,
+            "duration_ms": log.duration_ms,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "finished_at": log.finished_at.isoformat() if log.finished_at else None,
+            "errors": log.errors,
+        }
+        for log in logs
+    ]
