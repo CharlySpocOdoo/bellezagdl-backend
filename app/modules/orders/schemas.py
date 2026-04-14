@@ -82,6 +82,7 @@ class OrderResponse(BaseModel):
     order_number: str
     client_id: UUID
     vendor_id: UUID
+    client_name: Optional[str] = None
     status: OrderStatus
     subtotal: Decimal
     shipping_cost: Decimal
@@ -110,6 +111,7 @@ class OrderListResponse(BaseModel):
     order_number: str
     client_id: UUID
     vendor_id: UUID
+    client_name: Optional[str] = None
     status: OrderStatus
     total: Decimal
     is_vendor_purchase: bool

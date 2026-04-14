@@ -120,7 +120,7 @@ def list_orders(
     else:
         orders = service.get_all_orders(db, status)
 
-    return [_order_to_list_response(order) for order in orders]
+    return [_order_to_list_response(order, db) for order in orders]
 
 
 # ── Detalle de pedido ─────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ def list_all_orders(
 ):
     """Vista global de pedidos para el admin con filtros."""
     orders = service.get_all_orders(db, status, vendor_id, delivery_person_id)
-    return [_order_to_list_response(order) for order in orders]
+    return [_order_to_list_response(order, db) for order in orders]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -307,10 +307,17 @@ def _order_to_response(db: Session, order: Order) -> OrderResponse:
         OrderStatusHistory.order_id == order.id
     ).order_by(OrderStatusHistory.created_at).all()
 
+    client_name = None
+    if order.client_id:
+        client = db.query(Client).filter(Client.id == order.client_id).first()
+        if client:
+            client_name = f"{client.first_name} {client.last_name}"
+
     return OrderResponse(
         id=order.id,
         order_number=order.order_number,
         client_id=order.client_id,
+        client_name=client_name,
         vendor_id=order.vendor_id,
         status=order.status,
         subtotal=order.subtotal,
@@ -359,11 +366,17 @@ def _order_to_response(db: Session, order: Order) -> OrderResponse:
     )
 
 
-def _order_to_list_response(order: Order) -> OrderListResponse:
+def _order_to_list_response(order: Order, db=None) -> OrderListResponse:
+    client_name = None
+    if db and order.client_id:
+        client = db.query(Client).filter(Client.id == order.client_id).first()
+        if client:
+            client_name = f"{client.first_name} {client.last_name}"
     return OrderListResponse(
         id=order.id,
         order_number=order.order_number,
         client_id=order.client_id,
+        client_name=client_name,
         vendor_id=order.vendor_id,
         status=order.status,
         total=order.total,
