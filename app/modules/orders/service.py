@@ -435,6 +435,15 @@ def accept_partial_order(
         raise ValueError("El pedido no esta en estado parcialmente disponible")
 
     if accept:
+        # Recalcular total con solo los items disponibles
+        available_items = db.query(OrderItem).filter(
+            OrderItem.order_id == order.id,
+            OrderItem.cancelled_in_partial == False,
+        ).all()
+        new_subtotal = sum(item.subtotal for item in available_items)
+        order.subtotal = new_subtotal
+        order.total = new_subtotal + order.shipping_cost + order.tax_amount
+
         order.partial_accepted_at = datetime.utcnow()
         new_status = OrderStatus.confirmed
         order.confirmed_at = datetime.utcnow()
