@@ -9,7 +9,7 @@ from app.modules.auth.models import User, Vendor, Client
 from app.modules.admin.models import Notification
 from app.modules.vendors import service
 from app.modules.vendors.schemas import (
-    CreateVendorRequest, UpdateVendorRequest,
+    CreateVendorRequest, UpdateVendorRequest, UpdateVendorProfileRequest,
     VendorResponse, VendorProfileResponse,
     ClientResponse, NotificationResponse,
 )
@@ -175,3 +175,20 @@ def _vendor_to_response(vendor: Vendor, user: User) -> VendorResponse:
         notes=vendor.notes,
         commission_percentage=float(vendor.commission_percentage) if vendor.commission_percentage else None,
     )
+
+
+@router_vendor.patch("/me", response_model=VendorResponse)
+def update_vendor_profile(
+    request: UpdateVendorProfileRequest,
+    current_user: User = Depends(require_vendor),
+    db: Session = Depends(get_db),
+):
+    """El vendedor edita sus propios datos. Solo puede editar los suyos."""
+    vendor = service.get_vendor_by_user_id(db, current_user.id)
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendedor no encontrado")
+
+    update_data = request.model_dump(exclude_none=True)
+    vendor = service.update_vendor(db, vendor.id, **update_data)
+    user = db.query(User).filter(User.id == vendor.user_id).first()
+    return _vendor_to_response(vendor, user)

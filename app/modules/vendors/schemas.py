@@ -93,3 +93,12 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdateVendorProfileRequest(BaseModel):
+    display_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    workplace: Optional[str] = None
