@@ -113,6 +113,7 @@ class OrderListResponse(BaseModel):
     status: OrderStatus
     total: Decimal
     is_vendor_purchase: bool
+    vendor_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

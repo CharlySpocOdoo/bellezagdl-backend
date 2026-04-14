@@ -64,16 +64,17 @@ class ProductListResponse(BaseModel):
     slug: str
     description: Optional[str] = None
     category_id: UUID
+    category_name: Optional[str] = None
     brand_id: UUID
+    brand_name: Optional[str] = None
     image_url: Optional[str] = None
     image_thumb_url: Optional[str] = None
     tags: Optional[List[str]] = None
-    display_price: Decimal  # Precio segun rol — Venta o Vendedor
+    display_price: Decimal
     active: bool
 
     class Config:
         from_attributes = True
-
 
 class ProductDetailResponse(ProductListResponse):
     list_price: Optional[Decimal] = None   # Solo visible para admin

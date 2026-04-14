@@ -368,6 +368,7 @@ def _order_to_list_response(order: Order) -> OrderListResponse:
         status=order.status,
         total=order.total,
         is_vendor_purchase=order.is_vendor_purchase,
+        vendor_notes=order.vendor_notes,
         created_at=order.created_at,
         updated_at=order.updated_at,
     )

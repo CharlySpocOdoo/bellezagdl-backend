@@ -7,7 +7,7 @@ from app.database import get_db
 from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.auth.models import User, Vendor
 from app.modules.catalog import service
-from app.modules.catalog.models import ProductCategory, ProductVariant, ProductImage
+from app.modules.catalog.models import ProductCategory, ProductVariant, ProductImage, Brand
 from app.modules.catalog.schemas import (
     ProductListResponse, ProductDetailResponse,
     CategoryResponse, BrandResponse,
@@ -47,22 +47,26 @@ def get_products(
         search=search,
     )
 
-    return [
-        ProductListResponse(
+    result = []
+    for product, display_price in products:
+        brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
+        category = db.query(ProductCategory).filter(ProductCategory.id == product.category_id).first()
+        result.append(ProductListResponse(
             id=product.id,
             name=product.name,
             slug=product.slug,
             description=product.description,
             category_id=product.category_id,
+            category_name=category.name if category else None,
             brand_id=product.brand_id,
+            brand_name=brand.name if brand else None,
             image_url=product.image_url,
             image_thumb_url=product.image_thumb_url,
             tags=product.tags,
             display_price=display_price,
             active=product.active,
-        )
-        for product, display_price in products
-    ]
+        ))
+    return result
 
 
 @router.get("/products/{product_id}", response_model=ProductDetailResponse)
@@ -113,13 +117,19 @@ def get_product_detail(
         for img in images
     ]
 
+    brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
+    category = db.query(ProductCategory).filter(ProductCategory.id == product.category_id).first()
+
     return ProductDetailResponse(
         id=product.id,
         name=product.name,
         slug=product.slug,
         description=product.description,
         category_id=product.category_id,
+        category_name=category.name if category else None,
         brand_id=product.brand_id,
+        brand_name=brand.name if brand else None,
+        brand_origin=brand.origin.value if brand and brand.origin else None,
         image_url=product.image_url,
         image_thumb_url=product.image_thumb_url,
         tags=product.tags,
