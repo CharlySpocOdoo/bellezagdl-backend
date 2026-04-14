@@ -144,7 +144,22 @@ def refresh_access_token(db: Session, refresh_token: str) -> Tuple[str, str]:
 
 
 def get_valid_invitation(db: Session, token: str) -> Optional[Invitation]:
-    inv = db.query(Invitation).filter(Invitation.token == token).first()
+    # Si el parametro tiene 6 caracteres es un invitation_code corto
+    if len(token) == 6:
+        vendor = db.query(Vendor).filter(
+            Vendor.invitation_code == token.upper(),
+            Vendor.active == True,
+        ).first()
+        if not vendor:
+            return None
+        # Buscar la invitacion client_signup del vendedor
+        inv = db.query(Invitation).filter(
+            Invitation.vendor_id == vendor.id,
+            Invitation.type == InvitationType.client_signup,
+        ).first()
+    else:
+        inv = db.query(Invitation).filter(Invitation.token == token).first()
+
     if not inv:
         return None
     if inv.expires_at and inv.expires_at < datetime.utcnow():
