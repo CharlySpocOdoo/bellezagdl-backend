@@ -347,7 +347,13 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
         CommissionPeriod.week_start == week_start,
     ).first()
 
-    commission_pct = get_active_commission_percentage(db)
+    # Usar la tasa individual del vendedor si existe, si no la global
+    vendor = db.query(Vendor).filter(Vendor.id == order.vendor_id).first()
+    commission_pct = (
+        vendor.commission_percentage
+        if vendor and vendor.commission_percentage
+        else get_active_commission_percentage(db)
+    )
 
     if period:
         period.gross_sales_amount += gross_sales
