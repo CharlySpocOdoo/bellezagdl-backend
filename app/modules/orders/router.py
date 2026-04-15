@@ -270,8 +270,10 @@ def add_notes(
         vendor = db.query(Vendor).filter(Vendor.user_id == current_user.id).first()
         if not vendor or order.vendor_id != vendor.id:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
-        if request.vendor_notes:
-            order.vendor_notes = request.vendor_notes
+        # Vendedor siempre guarda en vendor_notes — sin importar que campo mande
+        nota = request.vendor_notes or request.notes
+        if nota:
+            order.vendor_notes = nota
     elif current_user.role == UserRole.admin:
         if request.notes:
             order.notes = request.notes
