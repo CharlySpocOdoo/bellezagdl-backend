@@ -85,7 +85,9 @@ def calculate_commissions_for_week(
         for item in items:
             vendor_data[vid]["gross_sales"] += item.sale_price_snapshot * item.quantity
             vendor_data[vid]["cost"] += item.cost_price_snapshot * item.quantity
-            vendor_data[vid]["commission"] += item.commission_amount_snapshot or Decimal("0")
+            # Recalcular comision desde cero — no usar snapshot que puede estar desactualizado
+            item_gross_profit = (item.sale_price_snapshot - item.cost_price_snapshot) * item.quantity
+            vendor_data[vid]["gross_profit_sum"] = vendor_data[vid].get("gross_profit_sum", Decimal("0")) + item_gross_profit
 
         vendor_data[vid]["shipping"] += order.shipping_cost or Decimal("0")
 
@@ -101,7 +103,9 @@ def calculate_commissions_for_week(
         )
         vendors_processed.add(vendor_id)
         gross_profit = data["gross_sales"] - data["cost"]
-        net_commission = data["commission"] - data["shipping"]
+        # Recalcular comision desde cero usando gross_profit real y tasa del vendedor
+        recalculated_commission = round(gross_profit * commission_pct / 100, 2)
+        net_commission = recalculated_commission - data["shipping"]
 
         existing = db.query(CommissionPeriod).filter(
             CommissionPeriod.vendor_id == vendor_id,
@@ -113,7 +117,7 @@ def calculate_commissions_for_week(
             existing.cost_amount = data["cost"]
             existing.commission_base_amount = gross_profit
             existing.commission_rate = commission_pct
-            existing.commission_amount = data["commission"]
+            existing.commission_amount = recalculated_commission
             existing.shipping_charges = data["shipping"]
             existing.net_commission = net_commission
             periods_updated += 1
@@ -126,7 +130,7 @@ def calculate_commissions_for_week(
                 cost_amount=data["cost"],
                 commission_base_amount=gross_profit,
                 commission_rate=commission_pct,
-                commission_amount=data["commission"],
+                commission_amount=recalculated_commission,
                 shipping_charges=data["shipping"],
                 net_commission=net_commission,
                 status=CommissionPeriodStatus.pending,
