@@ -131,7 +131,8 @@ def calculate_item_prices(
     gross_profit = calculate_gross_profit(sale_price, cost_price)
 
     commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
-    commission_amount = round(gross_profit * commission_pct / 100, 2)
+    commission_amount_per_unit = round(gross_profit * commission_pct / 100, 2)
+    commission_amount = round(commission_amount_per_unit * quantity, 2)
 
     if is_vendor_purchase:
         unit_price = calculate_vendor_price(sale_price, cost_price, commission_pct)
