@@ -60,7 +60,7 @@ def calculate_commissions_for_week(
         Order.delivered_at <= week_end_dt,
     ).all()
 
-    commission_pct = get_active_commission_percentage(db)
+    global_commission_pct = get_active_commission_percentage(db)
     vendors_processed = set()
     periods_created = 0
     periods_updated = 0
@@ -91,6 +91,14 @@ def calculate_commissions_for_week(
 
     # Crear o actualizar commission_periods
     for vendor_id, data in vendor_data.items():
+        # Usar tasa individual del vendedor si existe, si no la global
+        from app.modules.auth.models import Vendor as VendorModel
+        vendor_obj = db.query(VendorModel).filter(VendorModel.id == vendor_id).first()
+        commission_pct = (
+            vendor_obj.commission_percentage
+            if vendor_obj and vendor_obj.commission_percentage
+            else global_commission_pct
+        )
         vendors_processed.add(vendor_id)
         gross_profit = data["gross_sales"] - data["cost"]
         net_commission = data["commission"] - data["shipping"]
