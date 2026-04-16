@@ -119,9 +119,8 @@ def get_products(
 
     result = []
     for product in products:
-        if product_has_stock(db, product.id):
-            display_price = get_display_price(db, product, role, vendor_commission_pct)
-            result.append((product, display_price))
+        display_price = get_display_price(db, product, role, vendor_commission_pct)
+        result.append((product, display_price))
 
     return result
 

@@ -167,7 +167,7 @@ def create_order(
     Crea un pedido verificando stock y calculando snapshots.
     items_data: [{"variant_id": UUID, "quantity": int}]
     """
-    # Verificar stock de todos los items antes de crear nada
+    # Verificar que las variantes existan y esten activas
     for item in items_data:
         variant = db.query(ProductVariant).filter(
             ProductVariant.id == item["variant_id"],
@@ -175,13 +175,6 @@ def create_order(
         ).first()
         if not variant:
             raise ValueError(f"Variante {item['variant_id']} no encontrada")
-
-        total_stock = (variant.stock_qty or 0) + (variant.returned_stock_qty or 0)
-        if total_stock < item["quantity"]:
-            raise ValueError(
-                f"Stock insuficiente para {variant.sku}. "
-                f"Disponible: {total_stock}, solicitado: {item['quantity']}"
-            )
 
     # Calcular totales
     order_items = []
