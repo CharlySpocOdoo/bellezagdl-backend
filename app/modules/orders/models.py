@@ -66,6 +66,9 @@ class OrderItem(Base):
     cancelled_in_partial        = Column(Boolean, default=False)
     partial_cancellation_reason = Column(Text, nullable=True)
     partial_cancelled_at        = Column(DateTime, nullable=True)
+    returned_quantity           = Column(Integer, default=0, nullable=True)
+    return_reason               = Column(String(50), nullable=True)
+    returned_at                 = Column(DateTime, nullable=True)
 
     order                       = relationship("Order", back_populates="items")
 

@@ -42,8 +42,6 @@ class OrderStatus(str, enum.Enum):
     delivery_failed     = "delivery_failed"
     delivered_to_vendor = "delivered_to_vendor"
     delivered_to_client = "delivered_to_client"
-    return_requested    = "return_requested"
-    returned            = "returned"
     cancelled           = "cancelled"
 
 

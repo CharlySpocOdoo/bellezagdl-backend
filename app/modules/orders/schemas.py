@@ -25,7 +25,7 @@ class UpdateStatusRequest(BaseModel):
     status: OrderStatus
     notes: Optional[str] = None
     failure_reason: Optional[FailureReason] = None
-    delivery_person_id: Optional[UUID] = None  # Requerido al asignar repartidor
+    delivery_person_id: Optional[UUID] = None
 
 
 class MarkUnavailableRequest(BaseModel):
@@ -59,6 +59,8 @@ class OrderItemResponse(BaseModel):
     subtotal: Decimal
     commission_amount_snapshot: Optional[Decimal] = None
     cancelled_in_partial: bool = False
+    returned_quantity: Optional[int] = 0
+    return_reason: Optional[str] = None
 
     class Config:
         from_attributes = True

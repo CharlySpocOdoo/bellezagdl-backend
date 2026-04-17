@@ -40,12 +40,10 @@ VALID_TRANSITIONS = {
     ],
     OrderStatus.confirmed: [
         OrderStatus.preparing,
-        OrderStatus.return_requested,
         OrderStatus.cancelled,
     ],
     OrderStatus.preparing: [
         OrderStatus.in_delivery,
-        OrderStatus.return_requested,
     ],
     OrderStatus.in_delivery: [
         OrderStatus.delivered_to_vendor,
@@ -56,19 +54,11 @@ VALID_TRANSITIONS = {
     ],
     OrderStatus.delivered_to_vendor: [
         OrderStatus.delivered_to_client,
-        OrderStatus.return_requested,
-    ],
-    OrderStatus.delivered_to_client: [
-        OrderStatus.return_requested,
-    ],
-    OrderStatus.return_requested: [
-        OrderStatus.returned,
     ],
 }
 
 FINAL_STATES = {
     OrderStatus.delivered_to_client,
-    OrderStatus.returned,
     OrderStatus.cancelled,
 }
 
@@ -81,17 +71,12 @@ ADMIN_ONLY_TRANSITIONS = {
     OrderStatus.delivered_to_vendor,
     OrderStatus.delivered_to_client,
     OrderStatus.delivery_failed,
-    OrderStatus.returned,
 }
 
 # Transiciones que puede hacer el cliente
 CLIENT_ALLOWED_FROM = {
     OrderStatus.pending: [OrderStatus.cancelled],
     OrderStatus.partially_available: [OrderStatus.confirmed, OrderStatus.cancelled],
-    OrderStatus.confirmed: [OrderStatus.return_requested],
-    OrderStatus.preparing: [OrderStatus.return_requested],
-    OrderStatus.delivered_to_vendor: [OrderStatus.return_requested],
-    OrderStatus.delivered_to_client: [OrderStatus.return_requested],
 }
 
 
