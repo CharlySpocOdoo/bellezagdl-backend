@@ -89,6 +89,7 @@ def create_vendor(
     workplace: Optional[str] = None,
     workplace_type=None,
     notes: Optional[str] = None,
+    commission_percentage: Optional[float] = None,
 ) -> Vendor:
     existing = db.query(User).filter(User.email == email.lower()).first()
     if existing:
@@ -122,6 +123,7 @@ def create_vendor(
         invitation_token=client_invitation_token,  # El token del vendor es el de clientes
         notes=notes,
         active=False,
+        commission_percentage=commission_percentage,
     )
     db.add(vendor)
     db.flush()

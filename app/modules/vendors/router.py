@@ -42,6 +42,7 @@ def create_vendor(
             workplace=request.workplace,
             workplace_type=request.workplace_type,
             notes=request.notes,
+            commission_percentage=request.commission_percentage,
         )
     except ValueError as e:
         raise HTTPException(

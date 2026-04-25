@@ -19,6 +19,7 @@ class CreateVendorRequest(BaseModel):
     workplace: Optional[str] = None
     workplace_type: Optional[WorkplaceType] = None
     notes: Optional[str] = None
+    commission_percentage: Optional[float] = None
 
 
 class UpdateVendorRequest(BaseModel):
