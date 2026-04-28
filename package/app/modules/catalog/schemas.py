@@ -1,0 +1,95 @@
+from pydantic import BaseModel
+from typing import Optional, List
+from uuid import UUID
+from datetime import datetime
+from decimal import Decimal
+
+
+class CategoryResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    parent_id: Optional[UUID] = None
+    display_order: int = 0
+    active: bool
+    children: List["CategoryResponse"] = []
+
+    class Config:
+        from_attributes = True
+
+
+CategoryResponse.model_rebuild()
+
+
+class BrandResponse(BaseModel):
+    id: UUID
+    name: str
+    logo_url: Optional[str] = None
+    origin: Optional[str] = None
+    active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ProductImageResponse(BaseModel):
+    id: UUID
+    url: str
+    thumb_url: Optional[str] = None
+    display_order: int = 0
+    is_primary: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class ProductVariantResponse(BaseModel):
+    id: UUID
+    sku: str
+    variant_name: Optional[str] = None
+    stock_qty: int
+    returned_stock_qty: int
+    total_stock: int
+    image_url: Optional[str] = None
+    active: bool
+    display_order: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class ProductListResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    description: Optional[str] = None
+    category_id: UUID
+    category_name: Optional[str] = None
+    brand_id: UUID
+    brand_name: Optional[str] = None
+    image_url: Optional[str] = None
+    image_thumb_url: Optional[str] = None
+    tags: Optional[List[str]] = None
+    display_price: Decimal
+    active: bool
+
+    class Config:
+        from_attributes = True
+
+class ProductDetailResponse(ProductListResponse):
+    list_price: Optional[Decimal] = None   # Solo visible para admin
+    cost_price: Optional[Decimal] = None   # Solo visible para admin
+    sale_price: Decimal                    # Precio Venta calculado
+    variants: List[ProductVariantResponse] = []
+    images: List[ProductImageResponse] = []
+    category: Optional[CategoryResponse] = None
+    brand: Optional[BrandResponse] = None
+
+
+class SyncResultResponse(BaseModel):
+    status: str
+    products_scanned: int = 0
+    products_updated: int = 0
+    images_uploaded: int = 0
+    duration_ms: int = 0
+    errors: List[str] = []

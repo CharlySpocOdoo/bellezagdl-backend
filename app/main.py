@@ -25,7 +25,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=(
         ["*"] if settings.environment == "local"
-        else ["https://bellezagdl.com", "https://staging.bellezagdl.com"]
+	else ["https://rosadelima.shop", "https://www.rosadelima.shop"]
     ),
     allow_credentials=True,
     allow_methods=["*"],
