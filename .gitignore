@@ -19,3 +19,5 @@ __pycache__/
 
 # Alembic
 alembic/versions/*.pyc
+package/
+productos.xlsx
