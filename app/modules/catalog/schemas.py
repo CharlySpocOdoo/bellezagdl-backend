@@ -80,11 +80,7 @@ class ProductListResponse(BaseModel):
 class ProductDetailResponse(ProductListResponse):
     list_price: Optional[Decimal] = None   # Solo visible para admin
     cost_price: Optional[Decimal] = None   # Solo visible para admin
-    sale_price: Decimal                    # Precio Venta calculado
-    variants: List[ProductVariantResponse] = []
     images: List[ProductImageResponse] = []
-    category: Optional[CategoryResponse] = None
-    brand: Optional[BrandResponse] = None
 
 
 class SyncResultResponse(BaseModel):

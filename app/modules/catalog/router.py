@@ -102,7 +102,7 @@ def get_product_detail(
     if not result:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-    product, sale_price, display_price = result
+    product, _, display_price = result
 
     variants = service.get_variants(db, product.id)
     images = service.get_images(db, product.id)
@@ -150,7 +150,7 @@ def get_product_detail(
         image_thumb_url=product.image_thumb_url,
         tags=product.tags,
         display_price=display_price,
-        sale_price=sale_price,
+
         list_price=product.list_price if current_user.role == UserRole.admin else None,
         cost_price=product.cost_price if current_user.role == UserRole.admin else None,
         active=product.active,

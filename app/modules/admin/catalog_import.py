@@ -162,6 +162,7 @@ def _process_row(db: Session, row) -> dict:
             variant_name=variante_display,
             stock_qty=0,
             returned_stock_qty=0,
+            image_url=image_url,
             active=True,
             display_order=0,
         )
