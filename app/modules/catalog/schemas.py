@@ -72,6 +72,7 @@ class ProductListResponse(BaseModel):
     tags: Optional[List[str]] = None
     display_price: Decimal
     active: bool
+    variants: List["ProductVariantResponse"] = []
 
     class Config:
         from_attributes = True

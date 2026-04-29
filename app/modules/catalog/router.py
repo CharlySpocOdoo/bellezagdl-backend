@@ -51,6 +51,21 @@ def get_products(
     for product, display_price in products:
         brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
         category = db.query(ProductCategory).filter(ProductCategory.id == product.category_id).first()
+        variants = service.get_variants(db, product.id)
+        variant_responses = [
+            ProductVariantResponse(
+                id=v.id,
+                sku=v.sku,
+                variant_name=v.variant_name,
+                stock_qty=v.stock_qty,
+                returned_stock_qty=v.returned_stock_qty,
+                total_stock=service.get_total_stock(v),
+                image_url=v.image_url,
+                active=v.active,
+                display_order=v.display_order,
+            )
+            for v in variants
+        ]
         result.append(ProductListResponse(
             id=product.id,
             name=product.name,
@@ -65,6 +80,7 @@ def get_products(
             tags=product.tags,
             display_price=display_price,
             active=product.active,
+            variants=variant_responses,
         ))
     return result
 
