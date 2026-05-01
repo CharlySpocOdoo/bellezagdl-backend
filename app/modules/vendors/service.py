@@ -197,4 +197,4 @@ def get_vendor_clients(db: Session, vendor_id: UUID) -> List[Client]:
 
 
 def get_invitation_link(vendor: Vendor) -> str:
-    return f"https://bellezagdl.com/registro?token={vendor.invitation_token}"
+    return f"https://rosadelima.shop/registro?token={vendor.invitation_token}"
