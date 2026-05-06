@@ -30,7 +30,7 @@ def send_activation_email(email: str, display_name: str, activation_token: str) 
     import boto3
     from botocore.exceptions import ClientError
     
-    activation_link = f"https://app.rosadelima.mx/activar?token={activation_token}"
+    activation_link = f"https://rosadelima.shop/activar?token={activation_token}"
     
     text = f"""
 Hola {display_name},
@@ -197,4 +197,4 @@ def get_vendor_clients(db: Session, vendor_id: UUID) -> List[Client]:
 
 
 def get_invitation_link(vendor: Vendor) -> str:
-    return f"https://bellezagdl.com/registro?token={vendor.invitation_token}"
+    return f"https://rosadelima.shop/registro?token={vendor.invitation_token}"

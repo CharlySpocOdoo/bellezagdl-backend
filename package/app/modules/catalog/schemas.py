@@ -72,6 +72,7 @@ class ProductListResponse(BaseModel):
     tags: Optional[List[str]] = None
     display_price: Decimal
     active: bool
+    variants: List["ProductVariantResponse"] = []
 
     class Config:
         from_attributes = True
@@ -79,11 +80,7 @@ class ProductListResponse(BaseModel):
 class ProductDetailResponse(ProductListResponse):
     list_price: Optional[Decimal] = None   # Solo visible para admin
     cost_price: Optional[Decimal] = None   # Solo visible para admin
-    sale_price: Decimal                    # Precio Venta calculado
-    variants: List[ProductVariantResponse] = []
     images: List[ProductImageResponse] = []
-    category: Optional[CategoryResponse] = None
-    brand: Optional[BrandResponse] = None
 
 
 class SyncResultResponse(BaseModel):

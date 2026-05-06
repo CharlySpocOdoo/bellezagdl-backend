@@ -45,7 +45,7 @@ def _process_row(db: Session, row: dict) -> dict:
     description = str(row["description"]).strip() if _notna(row.get("description")) else None
     tags_raw = str(row["tags"]).strip() if _notna(row.get("tags")) else None
     tags = [t.strip() for t in tags_raw.split(",")] if tags_raw else None
-    image_url = f"https://{settings.s3_bucket_name}.s3.amazonaws.com/productos/{sku.lower()}.jpg"
+    image_url = f"https://{settings.s3_bucket_name}.s3.amazonaws.com/productos/{sku.upper()}.jpg"
     image_thumb_url = image_url
 
     if agregar == "no":
