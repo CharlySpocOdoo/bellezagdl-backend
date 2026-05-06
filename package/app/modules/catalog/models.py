@@ -69,6 +69,9 @@ class Product(Base):
     last_synced_at    = Column(DateTime, nullable=True)
     source_updated_at = Column(DateTime, nullable=True)
     tags              = Column(ARRAY(String), nullable=True)
+    sku_template      = Column(String(100), nullable=True)
+    disponible_oferta = Column(Boolean, default=False, nullable=True)
+    precio_oferta     = Column(Numeric(10, 2), nullable=True)
 
     category          = relationship("ProductCategory", back_populates="products")
     brand             = relationship("Brand", back_populates="products")

@@ -165,13 +165,29 @@ def import_catalog(
         raise HTTPException(status_code=422, detail=f"Columnas faltantes en el Excel: {missing}")
 
     created = updated = deleted = not_found = errors = 0
+    sku_template_pendiente = None
+    nombre_template_pendiente = None
 
     for row_values in ws.iter_rows(min_row=2, values_only=True):
         if not any(v is not None for v in row_values):
             continue
         row = dict(zip(headers, row_values))
+        agregar_val = str(row.get('agregar', '')).strip().lower()
+        variante_val = str(row.get('variante', '')).strip()
+        nombre_val = str(row.get('nombre', '')).strip()
+        if variante_val == 'Unico' and agregar_val == 'no':
+            sku_template_pendiente = str(row.get('sku', '')).strip()
+            nombre_template_pendiente = nombre_val
+            continue
         try:
             result = _process_row(db, row)
+            if sku_template_pendiente and nombre_template_pendiente == nombre_val:
+                from app.modules.catalog.models import Product as ProductModel
+                prod_obj = db.query(ProductModel).filter(ProductModel.name == nombre_val).first()
+                if prod_obj:
+                    prod_obj.sku_template = sku_template_pendiente
+                    sku_template_pendiente = None
+                    nombre_template_pendiente = None
             if result["action"] == "created": created += 1
             elif result["action"] in ("updated", "variant_added"): updated += 1
             elif result["action"] == "deleted": deleted += 1
