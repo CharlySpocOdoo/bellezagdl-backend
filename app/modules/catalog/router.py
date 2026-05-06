@@ -80,6 +80,7 @@ def get_products(
             tags=product.tags,
             display_price=display_price,
             active=product.active,
+            sku_template=product.sku_template,
             variants=variant_responses,
         ))
     return result
@@ -154,6 +155,7 @@ def get_product_detail(
         list_price=product.list_price if current_user.role == UserRole.admin else None,
         cost_price=product.cost_price if current_user.role == UserRole.admin else None,
         active=product.active,
+        sku_template=product.sku_template,
         variants=variant_responses,
         images=image_responses,
     )

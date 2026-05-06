@@ -48,21 +48,6 @@ def _process_row(db: Session, row: dict) -> dict:
     image_url = f"https://{settings.s3_bucket_name}.s3.amazonaws.com/productos/{sku.upper()}.jpg"
     image_thumb_url = image_url
 
-    if agregar == "no":
-        variante = db.query(ProductVariant).filter(ProductVariant.sku == sku).first()
-        if variante:
-            otras_variantes = db.query(ProductVariant).filter(
-                ProductVariant.product_id == variante.product_id,
-                ProductVariant.id != variante.id,
-            ).count()
-            db.delete(variante)
-            if otras_variantes == 0:
-                producto = db.query(Product).filter(Product.id == variante.product_id).first()
-                if producto:
-                    db.delete(producto)
-            return {"action": "deleted", "sku": sku}
-        return {"action": "not_found", "sku": sku}
-
     categoria = db.query(ProductCategory).filter(ProductCategory.name == categoria_nombre).first()
     if not categoria:
         slug = categoria_nombre.lower().replace(" ", "-").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u")
@@ -77,6 +62,33 @@ def _process_row(db: Session, row: dict) -> dict:
         db.flush()
     else:
         marca.brand_discount_percentage = descuento_pct
+    if agregar == "no":
+        # Si es el template (variante=Unico) guardar sku_template sin crear variante
+        if variante_nombre == "Unico":
+            # La marca y categoria ya fueron procesadas arriba
+            producto = db.query(Product).filter(
+                Product.name == producto_nombre,
+                Product.brand_id == marca.id,
+            ).first()
+            if producto:
+                producto.sku_template = sku
+                return {"action": "updated", "sku": sku}
+            return {"action": "not_found", "sku": sku}
+        # Si no es template — eliminar variante por SKU
+        variante = db.query(ProductVariant).filter(ProductVariant.sku == sku).first()
+        if variante:
+            otras_variantes = db.query(ProductVariant).filter(
+                ProductVariant.product_id == variante.product_id,
+                ProductVariant.id != variante.id,
+            ).count()
+            db.delete(variante)
+            if otras_variantes == 0:
+                producto = db.query(Product).filter(Product.id == variante.product_id).first()
+                if producto:
+                    db.delete(producto)
+            return {"action": "deleted", "sku": sku}
+        return {"action": "not_found", "sku": sku}
+
 
     cost_price = round(precio_lista * (1 - descuento_pct / 100), 2)
     slug_producto = producto_nombre.lower().replace(" ", "-").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u")
@@ -129,6 +141,10 @@ def _process_row(db: Session, row: dict) -> dict:
         if action == "updated":
             action = "variant_added"
 
+    # Si es producto simple (variante=Unico y agregar=si) guardar sku_template
+    if variante_nombre == "Unico" and producto:
+        producto.sku_template = sku
+
     return {"action": action, "sku": sku}
 
 
@@ -160,8 +176,9 @@ def import_catalog(
             elif result["action"] in ("updated", "variant_added"): updated += 1
             elif result["action"] == "deleted": deleted += 1
             elif result["action"] == "not_found": not_found += 1
-        except Exception:
+        except Exception as e:
             errors += 1
+            print(f"ERROR fila {i}: {str(e)}")
             db.rollback()
             continue
 
