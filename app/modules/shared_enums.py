@@ -17,6 +17,7 @@ class UserRole(str, enum.Enum):
     admin  = "admin"
     vendor = "vendor"
     client = "client"
+    oferta = "oferta"
 
 
 class WorkplaceType(str, enum.Enum):

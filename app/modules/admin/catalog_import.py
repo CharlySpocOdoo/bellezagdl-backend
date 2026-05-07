@@ -45,6 +45,8 @@ def _process_row(db: Session, row: dict) -> dict:
     description = str(row["description"]).strip() if _notna(row.get("description")) else None
     tags_raw = str(row["tags"]).strip() if _notna(row.get("tags")) else None
     tags = [t.strip() for t in tags_raw.split(",")] if tags_raw else None
+    disponible_oferta = str(row.get('oferta', '')).strip().lower() == 'si' if _notna(row.get('oferta')) else False
+    precio_oferta_val = Decimal(str(row['precio_oferta'])) if _notna(row.get('precio_oferta')) and disponible_oferta else None
     image_url = f"https://{settings.s3_bucket_name}.s3.amazonaws.com/productos/{sku.upper()}.jpg"
     image_thumb_url = image_url
 
@@ -101,6 +103,8 @@ def _process_row(db: Session, row: dict) -> dict:
             producto.name = producto_nombre
             producto.list_price = precio_lista
             producto.cost_price = Decimal(str(cost_price))
+            # No sobreescribir disponible_oferta — se maneja desde el template
+            # No sobreescribir precio_oferta — se maneja desde el template
             producto.category_id = categoria.id
             producto.brand_id = marca.id
             producto.slug = f"{slug_producto}-{str(producto.id)[:8]}"
@@ -122,6 +126,7 @@ def _process_row(db: Session, row: dict) -> dict:
                 list_price=precio_lista, cost_price=Decimal(str(cost_price)),
                 description=description, tags=tags,
                 image_url=image_url, image_thumb_url=image_thumb_url,
+                disponible_oferta=disponible_oferta, precio_oferta=precio_oferta_val,
                 active=True, display_order=0,
             )
             db.add(producto)
@@ -130,6 +135,8 @@ def _process_row(db: Session, row: dict) -> dict:
         else:
             producto.list_price = precio_lista
             producto.cost_price = Decimal(str(cost_price))
+            # No sobreescribir disponible_oferta — se maneja desde el template
+            # No sobreescribir precio_oferta — se maneja desde el template
             action = "updated"
 
         variante = ProductVariant(
@@ -166,6 +173,8 @@ def import_catalog(
 
     created = updated = deleted = not_found = errors = 0
     sku_template_pendiente = None
+    oferta_pendiente = None
+    precio_oferta_pendiente = None
     nombre_template_pendiente = None
 
     for row_values in ws.iter_rows(min_row=2, values_only=True):
@@ -177,6 +186,8 @@ def import_catalog(
         nombre_val = str(row.get('nombre', '')).strip()
         if variante_val == 'Unico' and agregar_val == 'no':
             sku_template_pendiente = str(row.get('sku', '')).strip()
+            oferta_pendiente = str(row.get('oferta', '')).strip().lower() == 'si' if _notna(row.get('oferta')) else False
+            precio_oferta_pendiente = Decimal(str(row.get('precio_oferta', '0'))) if _notna(row.get('precio_oferta')) else None
             nombre_template_pendiente = nombre_val
             continue
         try:
@@ -186,6 +197,10 @@ def import_catalog(
                 prod_obj = db.query(ProductModel).filter(ProductModel.name == nombre_val).first()
                 if prod_obj:
                     prod_obj.sku_template = sku_template_pendiente
+                    prod_obj.disponible_oferta = oferta_pendiente
+                    prod_obj.precio_oferta = precio_oferta_pendiente
+                    oferta_pendiente = None
+                    precio_oferta_pendiente = None
                     sku_template_pendiente = None
                     nombre_template_pendiente = None
             if result["action"] == "created": created += 1
