@@ -44,7 +44,12 @@ def _process_row(db: Session, row: dict) -> dict:
     agregar = str(row["agregar"]).strip().lower()
     description = str(row["description"]).strip() if _notna(row.get("description")) else None
     tags_raw = str(row["tags"]).strip() if _notna(row.get("tags")) else None
-    tags = [t.strip() for t in tags_raw.split(",")] if tags_raw else None
+    if tags_raw and tags_raw.lower() == "ninguno":
+        tags = []
+    elif tags_raw:
+        tags = [t.strip() for t in tags_raw.split(",")]
+    else:
+        tags = None
     disponible_oferta = str(row.get('oferta', '')).strip().lower() == 'si' if _notna(row.get('oferta')) else False
     precio_oferta_val = Decimal(str(row['precio_oferta'])) if _notna(row.get('precio_oferta')) and disponible_oferta else None
     image_url = f"https://{settings.s3_bucket_name}.s3.amazonaws.com/productos/{sku.upper()}.jpg"
