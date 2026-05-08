@@ -52,7 +52,12 @@ def _process_row(db: Session, row: dict) -> dict:
 
     categoria = db.query(ProductCategory).filter(ProductCategory.name == categoria_nombre).first()
     if not categoria:
-        slug = categoria_nombre.lower().replace(" ", "-").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u")
+        slug_base = categoria_nombre.lower().replace(" ", "-").replace("á","a").replace("é","e").replace("í","i").replace("ó","o").replace("ú","u")
+        # Verificar que el slug no exista ya
+        slug = slug_base
+        slug_exists = db.query(ProductCategory).filter(ProductCategory.slug == slug).first()
+        if slug_exists:
+            slug = f"{slug_base}-{str(uuid4())[:4]}"
         categoria = ProductCategory(id=uuid4(), name=categoria_nombre, slug=slug, active=True, display_order=0)
         db.add(categoria)
         db.flush()
@@ -209,7 +214,7 @@ def import_catalog(
             elif result["action"] == "not_found": not_found += 1
         except Exception as e:
             errors += 1
-            print(f"ERROR fila {i}: {str(e)}")
+            print(f"ERROR fila {idx}: {str(e)}")
             db.rollback()
             continue
 

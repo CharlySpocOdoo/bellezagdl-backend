@@ -63,6 +63,8 @@ def get_display_price(
     if role == UserRole.vendor:
         commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
         return calculate_vendor_price(sale_price, product.cost_price, commission_pct)
+    if role == UserRole.oferta:
+        return product.precio_oferta if product.precio_oferta else sale_price
 
     return sale_price
 
@@ -98,6 +100,8 @@ def get_products(
     Solo productos con stock > 0.
     """
     query = db.query(Product).filter(Product.active == True)
+    if role == UserRole.oferta:
+        query = query.filter(Product.disponible_oferta == True)
 
     if category_id:
         query = query.filter(Product.category_id == category_id)
