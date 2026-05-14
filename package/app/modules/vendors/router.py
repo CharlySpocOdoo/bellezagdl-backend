@@ -137,6 +137,7 @@ def get_vendor_clients(
             birth_date=client.birth_date,
             active=client.active,
             last_order_at=client.last_order_at,
+            created_at=client.created_at,
         ))
     return result
 
