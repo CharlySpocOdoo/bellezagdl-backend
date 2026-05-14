@@ -84,6 +84,7 @@ class Client(Base):
     active           = Column(Boolean, default=True)
     last_order_at    = Column(DateTime, nullable=True)
     notes            = Column(Text, nullable=True)
+    created_at       = Column(DateTime, default=datetime.utcnow, nullable=True)
 
     user             = relationship("User", back_populates="client")
     vendor           = relationship("Vendor", back_populates="clients")

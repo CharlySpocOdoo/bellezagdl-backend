@@ -79,6 +79,7 @@ class ClientResponse(BaseModel):
     birth_date: Optional[date] = None
     active: bool
     last_order_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
