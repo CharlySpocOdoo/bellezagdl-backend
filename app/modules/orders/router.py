@@ -169,7 +169,9 @@ def update_order_status(
         if not client or order.client_id != client.id:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
     elif current_user.role == UserRole.vendor:
-        raise HTTPException(status_code=403, detail="Los vendedores no pueden cambiar estados")
+        vendor = db.query(Vendor).filter(Vendor.user_id == current_user.id).first()
+        if not vendor or order.vendor_id != vendor.id:
+            raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
 
     try:
         order = service.change_order_status(
