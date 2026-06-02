@@ -23,25 +23,22 @@ router_admin = APIRouter()
 # ── Crear pedido ──────────────────────────────────────────────────────────────
 
 @router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+
 def create_order(
     request: CreateOrderRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Crea un pedido. Valida stock y calcula snapshots financieros."""
-    if current_user.role == UserRole.admin:
-        raise HTTPException(status_code=403, detail="El admin no puede crear pedidos")
+    if current_user.role in [UserRole.admin, UserRole.oferta]:
+        raise HTTPException(status_code=403, detail="Este rol no puede crear pedidos")
 
-    # Obtener vendor_id y client_id segun el rol
     if current_user.role == UserRole.vendor:
         vendor = db.query(Vendor).filter(Vendor.user_id == current_user.id).first()
         if not vendor:
             raise HTTPException(status_code=404, detail="Vendedor no encontrado")
 
         if request.is_vendor_purchase:
-            # Vendedor compra para si mismo
-            client_id = None
-            # Buscar o crear un client record para el vendor
             client = db.query(Client).filter(Client.user_id == current_user.id).first()
             if not client:
                 raise HTTPException(
@@ -50,7 +47,6 @@ def create_order(
                 )
             client_id = client.id
         else:
-            # Vendedor crea pedido para un cliente de su red
             if not request.client_id:
                 raise HTTPException(status_code=422, detail="client_id requerido")
             client = db.query(Client).filter(
@@ -66,6 +62,15 @@ def create_order(
 
         vendor_id = vendor.id
         vendor_commission_pct = vendor.commission_percentage
+
+    # ── NUEVO: caso wholesale ──
+    elif current_user.role == UserRole.wholesale:
+        client = db.query(Client).filter(Client.user_id == current_user.id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Cliente mayoreo no encontrado")
+        client_id = client.id
+        vendor_id = None          # pedidos wholesale no tienen vendedor
+        vendor_commission_pct = None
 
     else:  # client
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
@@ -325,6 +330,7 @@ def _order_to_response(db: Session, order: Order) -> OrderResponse:
         client_name=client_name,
         vendor_id=order.vendor_id,
         status=order.status,
+        sale_type=order.sale_type, 
         subtotal=order.subtotal,
         shipping_cost=order.shipping_cost,
         tax_amount=order.tax_amount,
@@ -384,6 +390,7 @@ def _order_to_list_response(order: Order, db=None) -> OrderListResponse:
         client_name=client_name,
         vendor_id=order.vendor_id,
         status=order.status,
+        sale_type=order.sale_type, 
         total=order.total,
         is_vendor_purchase=order.is_vendor_purchase,
         vendor_notes=order.vendor_notes,

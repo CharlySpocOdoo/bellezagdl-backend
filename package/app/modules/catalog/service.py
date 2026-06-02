@@ -14,9 +14,12 @@ from app.modules.shared_enums import UserRole
 
 # ── Calculos de precio ────────────────────────────────────────────────────────
 
-def calculate_sale_price(cost_price: Decimal, sale_margin_percentage: Decimal) -> Decimal:
-    """Precio Venta = Precio Costo x (1 + margen / 100)."""
-    return round(cost_price * (1 + sale_margin_percentage / 100), 2)
+def calculate_sale_price(list_price: Decimal) -> Decimal:
+    """
+    Precio Venta = Precio Lista x 1.50
+    ── CAMBIO: antes recibía cost_price y sale_margin — ahora solo list_price ──
+    """
+    return round(list_price * Decimal("1.50"), 2)
 
 
 def calculate_gross_profit(sale_price: Decimal, cost_price: Decimal) -> Decimal:
@@ -24,14 +27,21 @@ def calculate_gross_profit(sale_price: Decimal, cost_price: Decimal) -> Decimal:
     return sale_price - cost_price
 
 
-def calculate_vendor_price(sale_price: Decimal, cost_price: Decimal, commission_pct: Decimal) -> Decimal:
+def calculate_vendor_commission(sale_price: Decimal, list_price: Decimal, commission_pct: Decimal) -> Decimal:
     """
-    Precio Vendedor = Precio Venta - comision del vendedor.
-    La comision se calcula sobre la ganancia bruta.
+    Comision vendedor = (sale_price - list_price) × commission_rate
+    ── CAMBIO: antes se calculaba sobre gross_profit (sale_price - cost_price) ──
     """
-    gross_profit = calculate_gross_profit(sale_price, cost_price)
-    vendor_commission = round(gross_profit * commission_pct / 100, 2)
-    return round(sale_price - vendor_commission, 2)
+    return round((sale_price - list_price) * commission_pct / 100, 2)
+
+
+def calculate_vendor_price(sale_price: Decimal, list_price: Decimal, commission_pct: Decimal) -> Decimal:
+    """
+    Precio Vendedor = sale_price - comision_vendedor
+    ── CAMBIO: comisión ahora se calcula sobre (sale_price - list_price) ──
+    """
+    commission = calculate_vendor_commission(sale_price, list_price, commission_pct)
+    return round(sale_price - commission, 2)
 
 
 def get_active_commission_percentage(db: Session) -> Decimal:
@@ -41,7 +51,7 @@ def get_active_commission_percentage(db: Session) -> Decimal:
     ).order_by(CommissionSettings.active_from.desc()).first()
     if settings:
         return settings.commission_percentage
-    return Decimal("30.00")  # Default segun decision de negocio
+    return Decimal("30.00")
 
 
 def get_display_price(
@@ -52,21 +62,25 @@ def get_display_price(
 ) -> Decimal:
     """
     Devuelve el precio a mostrar segun el rol:
-    - Admin: Precio Venta (ve todo)
-    - Client: Precio Venta
-    - Vendor: Precio Vendedor (Precio Venta - su comision)
+    - Admin:     sale_price (list_price × 1.50)
+    - Client:    sale_price (list_price × 1.50)
+    - Vendor:    sale_price - comision sobre (sale_price - list_price)
+    - Wholesale: list_price  ── NUEVO ──
+    - Oferta:    precio_oferta
     """
-    brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
-    sale_margin = brand.sale_margin_percentage if brand else Decimal("50.00")
-    sale_price = calculate_sale_price(product.cost_price, sale_margin)
+    sale_price = calculate_sale_price(product.list_price)  # ── CAMBIO: antes usaba cost_price
+
+    if role == UserRole.wholesale:  # ── NUEVO ──
+        return product.list_price
 
     if role == UserRole.vendor:
         commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
-        return calculate_vendor_price(sale_price, product.cost_price, commission_pct)
+        return calculate_vendor_price(sale_price, product.list_price, commission_pct)
+
     if role == UserRole.oferta:
         return product.precio_oferta if product.precio_oferta else sale_price
 
-    return sale_price
+    return sale_price  # admin y client
 
 
 # ── Stock ─────────────────────────────────────────────────────────────────────
@@ -95,10 +109,6 @@ def get_products(
     brand_id: Optional[UUID] = None,
     search: Optional[str] = None,
 ) -> List[Tuple[Product, Decimal]]:
-    """
-    Devuelve lista de (producto, display_price).
-    Solo productos con stock > 0.
-    """
     query = db.query(Product).filter(Product.active == True)
     if role == UserRole.oferta:
         query = query.filter(Product.disponible_oferta == True)
@@ -112,7 +122,6 @@ def get_products(
 
     products = query.order_by(Product.display_order, Product.name).all()
 
-    # Obtener comision del vendedor si aplica
     vendor_commission_pct = None
     if role == UserRole.vendor and vendor_id:
         vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -135,9 +144,6 @@ def get_product_detail(
     role: UserRole,
     vendor_id: Optional[UUID] = None,
 ) -> Optional[Tuple[Product, Decimal, Decimal]]:
-    """
-    Devuelve (producto, sale_price, display_price) o None si no existe.
-    """
     product = db.query(Product).filter(
         Product.id == product_id,
         Product.active == True,
@@ -146,9 +152,7 @@ def get_product_detail(
     if not product:
         return None
 
-    brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
-    sale_margin = brand.sale_margin_percentage if brand else Decimal("50.00")
-    sale_price = calculate_sale_price(product.cost_price, sale_margin)
+    sale_price = calculate_sale_price(product.list_price)  # ── CAMBIO: antes usaba cost_price
 
     vendor_commission_pct = None
     if role == UserRole.vendor and vendor_id:
@@ -164,7 +168,6 @@ def get_product_detail(
 
 
 def get_categories(db: Session) -> List[ProductCategory]:
-    """Devuelve todas las categorias activas."""
     return db.query(ProductCategory).filter(
         ProductCategory.active == True,
         ProductCategory.parent_id.is_(None),
@@ -172,12 +175,10 @@ def get_categories(db: Session) -> List[ProductCategory]:
 
 
 def get_brands(db: Session) -> List[Brand]:
-    """Devuelve todas las marcas activas."""
     return db.query(Brand).filter(Brand.active == True).order_by(Brand.name).all()
 
 
 def get_variants(db: Session, product_id: UUID) -> List[ProductVariant]:
-    """Devuelve variantes activas de un producto."""
     return db.query(ProductVariant).filter(
         ProductVariant.product_id == product_id,
         ProductVariant.active == True,
@@ -185,7 +186,6 @@ def get_variants(db: Session, product_id: UUID) -> List[ProductVariant]:
 
 
 def get_images(db: Session, product_id: UUID) -> List[ProductImage]:
-    """Devuelve imagenes de un producto."""
     return db.query(ProductImage).filter(
         ProductImage.product_id == product_id,
     ).order_by(ProductImage.display_order).all()
@@ -194,11 +194,6 @@ def get_images(db: Session, product_id: UUID) -> List[ProductImage]:
 # ── Mock sync con Odoo ────────────────────────────────────────────────────────
 
 def sync_catalog_mock(db: Session, triggered_by_user_id: UUID) -> dict:
-    """
-    Mock de sync con Odoo para ambiente local.
-    En produccion se conecta por XML-RPC.
-    Crea datos de prueba si no existen.
-    """
     from app.modules.admin.models import CatalogSyncLog
     from app.modules.shared_enums import SyncStatus
     from datetime import datetime
@@ -220,7 +215,6 @@ def sync_catalog_mock(db: Session, triggered_by_user_id: UUID) -> dict:
     errors = []
 
     try:
-        # Crear categoria de prueba si no existe
         cat = db.query(ProductCategory).filter(
             ProductCategory.slug == "cosmeticos"
         ).first()
@@ -236,7 +230,6 @@ def sync_catalog_mock(db: Session, triggered_by_user_id: UUID) -> dict:
             db.add(cat)
             db.flush()
 
-        # Crear marca de prueba si no existe
         brand = db.query(Brand).filter(Brand.name == "Bissu").first()
         if not brand:
             brand = Brand(
@@ -250,7 +243,6 @@ def sync_catalog_mock(db: Session, triggered_by_user_id: UUID) -> dict:
             db.add(brand)
             db.flush()
 
-        # Crear productos de prueba si no existen
         mock_products = [
             {"name": "Labial Rojo Bissu", "sku": "BIS-LAB-001", "cost": Decimal("45.00"), "variant": "Rojo"},
             {"name": "Labial Rojo Bissu", "sku": "BIS-LAB-002", "cost": Decimal("45.00"), "variant": "Rosa"},
@@ -273,7 +265,6 @@ def sync_catalog_mock(db: Session, triggered_by_user_id: UUID) -> dict:
                 ).first()
 
                 if not product:
-                    # Asegurar slug unico
                     slug = slug_base
                     counter = 1
                     while db.query(Product).filter(Product.slug == slug).first():

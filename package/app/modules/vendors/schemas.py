@@ -80,6 +80,9 @@ class ClientResponse(BaseModel):
     active: bool
     last_order_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    business_name: Optional[str] = None   # ── NUEVO ──
+    rfc: Optional[str] = None             # ── NUEVO ──
+    fiscal_address: Optional[str] = None  # ── NUEVO ──
 
     class Config:
         from_attributes = True

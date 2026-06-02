@@ -74,7 +74,7 @@ class Client(Base):
 
     id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id          = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=False)
-    vendor_id        = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=False)
+    vendor_id        = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=True)  # ── NUEVO: nullable
     first_name       = Column(String(255), nullable=False)
     last_name        = Column(String(255), nullable=False)
     gender           = Column(SAEnum(Gender), nullable=True)
@@ -85,6 +85,9 @@ class Client(Base):
     last_order_at    = Column(DateTime, nullable=True)
     notes            = Column(Text, nullable=True)
     created_at       = Column(DateTime, default=datetime.utcnow, nullable=True)
+    business_name    = Column(String(255), nullable=True)  # ── NUEVO
+    rfc              = Column(String(20), nullable=True)   # ── NUEVO
+    fiscal_address   = Column(Text, nullable=True)         # ── NUEVO
 
     user             = relationship("User", back_populates="client")
     vendor           = relationship("Vendor", back_populates="clients")

@@ -5,6 +5,7 @@ from mangum import Mangum
 from app.config import settings
 from app.database import check_db_connection
 
+from app.modules.admin.wholesale_clients import router_admin as wholesale_clients_router  
 from app.modules.auth.router import router as auth_router
 from app.modules.vendors.router import router_admin as vendors_admin_router, router_vendor as vendors_router
 from app.modules.catalog.router import router as catalog_router
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(wholesale_clients_router, prefix="/v1/admin/wholesale-clients", tags=["Admin - Mayoreo"])  
 app.include_router(auth_router, prefix="/v1/auth", tags=["Auth"])
 app.include_router(vendors_admin_router, prefix="/v1/admin/vendors", tags=["Admin - Vendedores"])
 app.include_router(vendors_router, prefix="/v1/vendors", tags=["Vendedores"])

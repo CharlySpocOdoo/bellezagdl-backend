@@ -83,7 +83,7 @@ class OrderResponse(BaseModel):
     id: UUID
     order_number: str
     client_id: UUID
-    vendor_id: UUID
+    vendor_id: Optional[UUID] = None
     client_name: Optional[str] = None
     status: OrderStatus
     sale_type: Optional[SaleType] = None  # ── NUEVO ──
@@ -113,7 +113,7 @@ class OrderListResponse(BaseModel):
     id: UUID
     order_number: str
     client_id: UUID
-    vendor_id: UUID
+    vendor_id: Optional[UUID] = None
     client_name: Optional[str] = None
     status: OrderStatus
     sale_type: Optional[SaleType] = None  # ── NUEVO ──

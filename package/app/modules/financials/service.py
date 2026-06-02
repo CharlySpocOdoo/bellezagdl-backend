@@ -10,7 +10,7 @@ from app.modules.orders.models import Order, OrderItem, Shipment
 from app.modules.commissions.models import CommissionPeriod, CommissionPeriodStatus
 from app.modules.auth.models import Vendor
 from app.modules.catalog.models import Product, ProductVariant
-from app.modules.shared_enums import OrderStatus
+from app.modules.shared_enums import OrderStatus, SaleType  # ── NUEVO: SaleType ──
 
 
 def get_financial_report(
@@ -19,11 +19,9 @@ def get_financial_report(
     date_to: date,
     vendor_id: Optional[UUID] = None,
 ) -> dict:
-    """Reporte financiero completo para un periodo."""
     from_dt = datetime.combine(date_from, datetime.min.time())
     to_dt = datetime.combine(date_to, datetime.max.time())
 
-    # Pedidos entregados en el periodo
     query = db.query(Order).filter(
         Order.status == OrderStatus.delivered_to_client,
         Order.delivered_at >= from_dt,
@@ -35,10 +33,13 @@ def get_financial_report(
     orders = query.all()
     order_ids = [o.id for o in orders]
 
-    # Totales de items
     gross_revenue = Decimal("0")
     total_cost = Decimal("0")
     tax_amount = Decimal("0")
+    retail_revenue = Decimal("0")   # ── NUEVO ──
+    retail_cost = Decimal("0")      # ── NUEVO ──
+    wholesale_revenue = Decimal("0")  # ── NUEVO ──
+    wholesale_cost = Decimal("0")     # ── NUEVO ──
 
     if order_ids:
         items = db.query(OrderItem).filter(
@@ -46,16 +47,32 @@ def get_financial_report(
             OrderItem.cancelled_in_partial == False,
         ).all()
 
+        # Mapa order_id → sale_type para clasificar items
+        # ── NUEVO ──
+        order_sale_type = {o.id: o.sale_type for o in orders}
+
         for item in items:
-            gross_revenue += item.sale_price_snapshot * item.quantity
-            total_cost += item.cost_price_snapshot * item.quantity
+            item_revenue = item.sale_price_snapshot * item.quantity
+            item_cost = item.cost_price_snapshot * item.quantity
+            gross_revenue += item_revenue
+            total_cost += item_cost
+
+            # ── NUEVO: separar por sale_type ──
+            sale_type = order_sale_type.get(item.order_id)
+            if sale_type == SaleType.wholesale:
+                wholesale_revenue += item_revenue
+                wholesale_cost += item_cost
+            else:
+                retail_revenue += item_revenue
+                retail_cost += item_cost
 
         for order in orders:
             tax_amount += order.tax_amount or Decimal("0")
 
     gross_profit = gross_revenue - total_cost
+    retail_profit = retail_revenue - retail_cost        # ── NUEVO ──
+    wholesale_profit = wholesale_revenue - wholesale_cost  # ── NUEVO ──
 
-    # Comisiones pagadas en el periodo
     commissions_query = db.query(CommissionPeriod).filter(
         CommissionPeriod.status == CommissionPeriodStatus.paid,
         CommissionPeriod.paid_at >= from_dt,
@@ -68,7 +85,6 @@ def get_financial_report(
     commissions = commissions_query.all()
     commissions_paid = sum(c.net_commission for c in commissions)
 
-    # Costos de envio en el periodo
     shipments_query = db.query(Shipment).filter(
         Shipment.delivered_at >= from_dt,
         Shipment.delivered_at <= to_dt,
@@ -84,7 +100,6 @@ def get_financial_report(
         (gross_profit / gross_revenue * 100) if gross_revenue > 0 else Decimal("0"), 2
     )
 
-    # Total de pedidos en el periodo (todos los estados)
     total_query = db.query(func.count(Order.id)).filter(
         Order.created_at >= from_dt,
         Order.created_at <= to_dt,
@@ -106,16 +121,18 @@ def get_financial_report(
         "tax_amount": tax_amount,
         "net_profit": net_profit,
         "gross_margin_pct": gross_margin_pct,
+        "retail_revenue": retail_revenue,       # ── NUEVO ──
+        "retail_profit": retail_profit,         # ── NUEVO ──
+        "wholesale_revenue": wholesale_revenue, # ── NUEVO ──
+        "wholesale_profit": wholesale_profit,   # ── NUEVO ──
     }
 
 
 def get_dashboard(db: Session) -> dict:
-    """Metricas del dia para el dashboard del admin."""
     today = datetime.utcnow().date()
     today_start = datetime.combine(today, datetime.min.time())
     today_end = datetime.combine(today, datetime.max.time())
 
-    # Pedidos por estado
     status_counts = []
     for status in OrderStatus:
         count = db.query(func.count(Order.id)).filter(
@@ -124,7 +141,6 @@ def get_dashboard(db: Session) -> dict:
         if count > 0:
             status_counts.append({"label": status.value, "value": count})
 
-    # Ingresos del dia
     todays_orders = db.query(Order).filter(
         Order.status == OrderStatus.delivered_to_client,
         Order.delivered_at >= today_start,
@@ -135,18 +151,15 @@ def get_dashboard(db: Session) -> dict:
     for order in todays_orders:
         todays_revenue += order.total
 
-    # Comisiones pendientes de pago
     pending_commissions = db.query(CommissionPeriod).filter(
         CommissionPeriod.status == CommissionPeriodStatus.pending,
     ).all()
     pending_total = sum(p.net_commission for p in pending_commissions)
 
-    # Vendedores activos
     active_vendors = db.query(func.count(Vendor.id)).filter(
         Vendor.active == True
     ).scalar() or 0
 
-    # Productos con stock bajo (menos de 5 unidades)
     low_stock = db.query(func.count(ProductVariant.id)).filter(
         ProductVariant.active == True,
         (ProductVariant.stock_qty + ProductVariant.returned_stock_qty) < 5,

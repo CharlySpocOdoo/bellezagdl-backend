@@ -87,6 +87,7 @@ def create_order(
             client_id=client_id,
             vendor_id=vendor_id,
             items_data=items_data,
+            role=current_user.role,
             delivery_address=request.delivery_address,
             notes=request.notes,
             is_vendor_purchase=request.is_vendor_purchase,

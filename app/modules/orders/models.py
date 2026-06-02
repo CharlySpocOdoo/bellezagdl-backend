@@ -9,7 +9,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import Enum as SAEnum
 
 from app.database import Base
-from app.modules.shared_enums import OrderStatus, FailureReason
+from app.modules.shared_enums import OrderStatus, FailureReason, SaleType  # ── NUEVO: SaleType
 
 
 class Order(Base):
@@ -18,12 +18,13 @@ class Order(Base):
     id                      = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_number            = Column(String(50), unique=True, nullable=False)
     client_id               = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=False)
-    vendor_id               = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=False)
+    vendor_id               = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=True)
     delivery_person_id      = Column(UUID(as_uuid=True), ForeignKey("delivery_persons.id"), nullable=True)
     shipment_id             = Column(UUID(as_uuid=True), ForeignKey("shipments.id"), nullable=True)
     supplier_id             = Column(UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True)
     supplier_contact_id     = Column(UUID(as_uuid=True), ForeignKey("supplier_contacts.id"), nullable=True)
     status                  = Column(SAEnum(OrderStatus), nullable=False, default=OrderStatus.pending)
+    sale_type               = Column(SAEnum(SaleType), nullable=True, default=SaleType.retail)  # ── NUEVO
     subtotal                = Column(Numeric(10, 2), nullable=False)
     vendor_discount_amount  = Column(Numeric(10, 2), default=0)
     shipping_cost           = Column(Numeric(10, 2), default=0)
@@ -95,10 +96,12 @@ class Shipment(Base):
 
     id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     delivery_person_id   = Column(UUID(as_uuid=True), ForeignKey("delivery_persons.id"), nullable=False)
-    vendor_id            = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=False)
+    vendor_id            = Column(UUID(as_uuid=True), ForeignKey("vendors.id"), nullable=True)          # ── NUEVO: nullable
     delivered_at         = Column(DateTime, nullable=True)
     order_count          = Column(Integer, default=0)
     total_amount         = Column(Numeric(10, 2), default=0)
     shipping_cost        = Column(Numeric(10, 2), default=0)
     shipping_cost_waived = Column(Boolean, default=False)
     notes                = Column(Text, nullable=True)
+    wholesale_client_id  = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=True)          # ── NUEVO
+    sale_type            = Column(SAEnum(SaleType), nullable=True)                                       # ── NUEVO
