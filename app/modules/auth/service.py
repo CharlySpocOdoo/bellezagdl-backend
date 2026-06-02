@@ -211,9 +211,31 @@ def activate_vendor(db: Session, invitation_token: str, password: str) -> Tuple[
     if not inv or inv.type != InvitationType.vendor_onboarding:
         raise ValueError("Invitacion invalida o expirada")
 
+    # ── NUEVO: soporta tanto vendor como wholesale ──
     vendor = db.query(Vendor).filter(Vendor.id == inv.vendor_id).first()
+
+    # Si no hay vendor asociado puede ser un cliente wholesale
     if not vendor:
-        raise ValueError("Vendedor no encontrado")
+        # Buscar el user por email_hint
+        user = db.query(User).filter(User.email == inv.email_hint).first()
+        if not user:
+            raise ValueError("Usuario no encontrado")
+        if user.role not in [UserRole.vendor, UserRole.wholesale]:
+            raise ValueError("Este enlace no es valido para este tipo de cuenta")
+
+        user.password_hash = hash_password(password)
+        user.active = True
+        user.email_verified_at = datetime.utcnow()
+        inv.use_count += 1
+        db.commit()
+        db.refresh(user)
+
+        client = db.query(Client).filter(Client.user_id == user.id).first()
+        profile_id = client.id if client else None
+        access_token = create_access_token(user, profile_id)
+        refresh_token = create_refresh_token()
+        save_refresh_token(db, user.id, refresh_token)
+        return access_token, refresh_token
 
     user = db.query(User).filter(User.id == vendor.user_id).first()
     if not user:

@@ -14,10 +14,11 @@ class Gender(str, enum.Enum):
 
 
 class UserRole(str, enum.Enum):
-    admin  = "admin"
-    vendor = "vendor"
-    client = "client"
-    oferta = "oferta"
+    admin     = "admin"
+    vendor    = "vendor"
+    client    = "client"
+    oferta    = "oferta"
+    wholesale = "wholesale"  # ── NUEVO ──
 
 
 class WorkplaceType(str, enum.Enum):
@@ -64,10 +65,17 @@ class BrandOrigin(str, enum.Enum):
     imported = "imported"
 
 
+# ── NUEVO ──────────────────────────────────────────────────────────────────────
+class SaleType(str, enum.Enum):
+    retail    = "retail"
+    wholesale = "wholesale"
+# ── FIN NUEVO ──────────────────────────────────────────────────────────────────
+
+
 # Instancias de SAEnum con create_type=False para módulos que NO son los dueños
-# El módulo dueño usa el enum de Python directamente — SQLAlchemy lo crea solo una vez
 gender_type        = SAEnum(Gender,        name="gender",        create_type=False)
 userrole_type      = SAEnum(UserRole,      name="userrole",      create_type=False)
 workplacetype_type = SAEnum(WorkplaceType, name="workplacetype", create_type=False)
 orderstatus_type   = SAEnum(OrderStatus,   name="orderstatus",   create_type=False)
 failurereason_type = SAEnum(FailureReason, name="failurereason", create_type=False)
+saletype_type      = SAEnum(SaleType,      name="saletype",      create_type=False)  # ── NUEVO ──

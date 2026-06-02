@@ -69,7 +69,6 @@ ADMIN_ONLY_TRANSITIONS = {
     OrderStatus.preparing,
     OrderStatus.in_delivery,
     OrderStatus.delivered_to_vendor,
-    OrderStatus.delivered_to_client,
     OrderStatus.delivery_failed,
 }
 
@@ -77,6 +76,10 @@ ADMIN_ONLY_TRANSITIONS = {
 CLIENT_ALLOWED_FROM = {
     OrderStatus.pending: [OrderStatus.cancelled],
     OrderStatus.partially_available: [OrderStatus.confirmed, OrderStatus.cancelled],
+}
+
+VENDOR_ALLOWED_FROM = {
+    OrderStatus.delivered_to_vendor: [OrderStatus.delivered_to_client],
 }
 
 
@@ -89,8 +92,16 @@ def validate_transition(
     allowed = VALID_TRANSITIONS.get(current_status, [])
     if new_status not in allowed:
         return False
+
     if role == UserRole.vendor:
-        return False  # Vendor nunca cambia estados
+        allowed = VENDOR_ALLOWED_FROM.get(current_status, [])
+        if new_status not in allowed:
+            raise ValueError(
+                f"El vendedor no puede cambiar el estado de "
+                f"{current_status.value} a {new_status.value}"
+            )
+        return True
+
     if role == UserRole.client:
         client_allowed = CLIENT_ALLOWED_FROM.get(current_status, [])
         return new_status in client_allowed

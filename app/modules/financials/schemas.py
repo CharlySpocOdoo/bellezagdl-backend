@@ -10,14 +10,19 @@ class FinancialReportResponse(BaseModel):
     period_to: date
     total_orders: int
     delivered_orders: int
-    gross_revenue: Decimal        # Suma de Precio Venta x cantidad
-    total_cost: Decimal           # Suma de Precio Costo x cantidad
-    gross_profit: Decimal         # gross_revenue - total_cost
-    commissions_paid: Decimal     # Comisiones pagadas a vendedores
-    shipping_costs: Decimal       # Costos de envio de shipments
-    tax_amount: Decimal           # Impuestos (0 por ahora)
-    net_profit: Decimal           # gross_profit - comisiones - envios - impuestos
-    gross_margin_pct: Decimal     # gross_profit / gross_revenue x 100
+    gross_revenue: Decimal
+    total_cost: Decimal
+    gross_profit: Decimal
+    commissions_paid: Decimal
+    shipping_costs: Decimal
+    tax_amount: Decimal
+    net_profit: Decimal
+    gross_margin_pct: Decimal
+    # ── NUEVO: separación por sale_type ──
+    retail_revenue: Optional[Decimal] = None       # Ingresos menudeo
+    retail_profit: Optional[Decimal] = None        # Ganancia menudeo
+    wholesale_revenue: Optional[Decimal] = None    # Ingresos mayoreo
+    wholesale_profit: Optional[Decimal] = None     # Ganancia mayoreo (100% admin)
 
 
 class DashboardMetric(BaseModel):

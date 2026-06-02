@@ -11,16 +11,16 @@ from app.modules.catalog.models import Product, ProductVariant, Brand
 from app.modules.catalog.service import (
     calculate_sale_price, calculate_vendor_price,
     calculate_gross_profit, get_active_commission_percentage,
+    calculate_vendor_commission,  # ── NUEVO ──
 )
 from app.modules.orders.models import Order, OrderItem, OrderStatusHistory, Shipment
 from app.modules.commissions.models import CommissionPeriod, CommissionSettings
-from app.modules.shared_enums import OrderStatus, UserRole, FailureReason
+from app.modules.shared_enums import OrderStatus, UserRole, FailureReason, SaleType  # ── NUEVO: SaleType
 
 
 # ── Numero de pedido ──────────────────────────────────────────────────────────
 
 def generate_order_number(db: Session) -> str:
-    """Genera numero de pedido unico: ORD-2025-00001."""
     year = datetime.utcnow().year
     count = db.query(func.count(Order.id)).scalar() or 0
     return f"ORD-{year}-{str(count + 1).zfill(5)}"
@@ -48,6 +48,7 @@ VALID_TRANSITIONS = {
     OrderStatus.in_delivery: [
         OrderStatus.delivered_to_vendor,
         OrderStatus.delivery_failed,
+        OrderStatus.delivered_to_client,  # ── NUEVO: wholesale va directo ──
     ],
     OrderStatus.delivery_failed: [
         OrderStatus.preparing,
@@ -62,7 +63,6 @@ FINAL_STATES = {
     OrderStatus.cancelled,
 }
 
-# Transiciones que solo puede hacer el admin
 ADMIN_ONLY_TRANSITIONS = {
     OrderStatus.partially_available,
     OrderStatus.confirmed,
@@ -72,7 +72,6 @@ ADMIN_ONLY_TRANSITIONS = {
     OrderStatus.delivery_failed,
 }
 
-# Transiciones que puede hacer el cliente
 CLIENT_ALLOWED_FROM = {
     OrderStatus.pending: [OrderStatus.cancelled],
     OrderStatus.partially_available: [OrderStatus.confirmed, OrderStatus.cancelled],
@@ -88,11 +87,9 @@ def validate_transition(
     new_status: OrderStatus,
     role: UserRole,
 ) -> bool:
-    """Valida que la transicion sea permitida para el rol."""
     allowed = VALID_TRANSITIONS.get(current_status, [])
     if new_status not in allowed:
         return False
-
     if role == UserRole.vendor:
         allowed = VENDOR_ALLOWED_FROM.get(current_status, [])
         if new_status not in allowed:
@@ -101,7 +98,6 @@ def validate_transition(
                 f"{current_status.value} a {new_status.value}"
             )
         return True
-
     if role == UserRole.client:
         client_allowed = CLIENT_ALLOWED_FROM.get(current_status, [])
         return new_status in client_allowed
@@ -114,25 +110,25 @@ def calculate_item_prices(
     db: Session,
     variant: ProductVariant,
     quantity: int,
-    is_vendor_purchase: bool,
+    sale_type: SaleType,  # ── NUEVO: reemplaza is_vendor_purchase ──
     vendor_commission_pct: Optional[Decimal] = None,
 ) -> dict:
-    """Calcula todos los precios de un item del pedido."""
     product = db.query(Product).filter(Product.id == variant.product_id).first()
-    brand = db.query(Brand).filter(Brand.id == product.brand_id).first()
 
-    sale_margin = brand.sale_margin_percentage if brand else Decimal("50.00")
     cost_price = variant.cost_price_override or product.cost_price
-    sale_price = calculate_sale_price(cost_price, sale_margin)
-    gross_profit = calculate_gross_profit(sale_price, cost_price)
+    list_price = product.list_price
+    sale_price = calculate_sale_price(list_price)  # ── CAMBIO: antes pasaba cost_price y margen ──
 
     commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
-    commission_amount_per_unit = round(gross_profit * commission_pct / 100, 2)
-    commission_amount = round(commission_amount_per_unit * quantity, 2)
 
-    if is_vendor_purchase:
-        unit_price = calculate_vendor_price(sale_price, cost_price, commission_pct)
+    # ── CAMBIO: comisión sobre (sale_price - list_price) ──
+    if sale_type == SaleType.wholesale:
+        unit_price = list_price
+        commission_amount = Decimal("0.00")
     else:
+        commission_amount = round(
+            calculate_vendor_commission(sale_price, list_price, commission_pct) * quantity, 2
+        )
         unit_price = sale_price
 
     return {
@@ -152,18 +148,17 @@ def calculate_item_prices(
 def create_order(
     db: Session,
     client_id: UUID,
-    vendor_id: UUID,
+    vendor_id: Optional[UUID],
     items_data: List[dict],
+    role: UserRole,  # ── NUEVO: para determinar sale_type ──
     delivery_address: Optional[str] = None,
     notes: Optional[str] = None,
     is_vendor_purchase: bool = False,
     vendor_commission_pct: Optional[Decimal] = None,
 ) -> Order:
-    """
-    Crea un pedido verificando stock y calculando snapshots.
-    items_data: [{"variant_id": UUID, "quantity": int}]
-    """
-    # Verificar que las variantes existan y esten activas
+    # ── NUEVO: determinar sale_type según rol ──
+    sale_type = SaleType.wholesale if role == UserRole.wholesale else SaleType.retail
+
     for item in items_data:
         variant = db.query(ProductVariant).filter(
             ProductVariant.id == item["variant_id"],
@@ -172,7 +167,6 @@ def create_order(
         if not variant:
             raise ValueError(f"Variante {item['variant_id']} no encontrada")
 
-    # Calcular totales
     order_items = []
     subtotal = Decimal("0.00")
 
@@ -183,7 +177,7 @@ def create_order(
 
         prices = calculate_item_prices(
             db, variant, item["quantity"],
-            is_vendor_purchase, vendor_commission_pct
+            sale_type, vendor_commission_pct,  # ── CAMBIO: pasa sale_type ──
         )
         prices["variant_id"] = variant.id
         prices["product_id"] = variant.product_id
@@ -191,12 +185,12 @@ def create_order(
         order_items.append(prices)
         subtotal += prices["subtotal"]
 
-    # Crear pedido
     order = Order(
         order_number=generate_order_number(db),
         client_id=client_id,
         vendor_id=vendor_id,
         status=OrderStatus.pending,
+        sale_type=sale_type,  # ── NUEVO ──
         subtotal=subtotal,
         shipping_cost=Decimal("0.00"),
         tax_amount=Decimal("0.00"),
@@ -209,7 +203,6 @@ def create_order(
     db.add(order)
     db.flush()
 
-    # Crear items
     for item_data in order_items:
         order_item = OrderItem(
             order_id=order.id,
@@ -228,7 +221,6 @@ def create_order(
         )
         db.add(order_item)
 
-    # Registrar estado inicial
     _record_status_change(db, order.id, None, OrderStatus.pending, None, "Pedido creado")
 
     db.commit()
@@ -248,9 +240,12 @@ def change_order_status(
     failure_reason: Optional[FailureReason] = None,
     delivery_person_id: Optional[UUID] = None,
 ) -> Order:
-    """Cambia el estado del pedido validando transicion y permisos."""
     if order.status in FINAL_STATES:
         raise ValueError(f"El pedido {order.order_number} esta en estado final y no puede cambiar")
+
+    # ── NUEVO: bloquear delivered_to_vendor en pedidos wholesale ──
+    if new_status == OrderStatus.delivered_to_vendor and order.sale_type == SaleType.wholesale:
+        raise ValueError("Los pedidos de mayoreo no pasan por delivered_to_vendor")
 
     if not validate_transition(order.status, new_status, role):
         raise ValueError(
@@ -317,7 +312,10 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
     """Registra la comision del vendedor al llegar a delivered_to_client."""
     from app.modules.commissions.models import CommissionPeriod, CommissionPeriodStatus
     from datetime import timedelta
-    import calendar
+
+    # ── NUEVO: pedidos wholesale no generan comisión ──
+    if order.sale_type == SaleType.wholesale:
+        return
 
     items = db.query(OrderItem).filter(
         OrderItem.order_id == order.id,
@@ -337,7 +335,6 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
         CommissionPeriod.week_start == week_start,
     ).first()
 
-    # Usar la tasa individual del vendedor si existe, si no la global
     vendor = db.query(Vendor).filter(Vendor.id == order.vendor_id).first()
     commission_pct = (
         vendor.commission_percentage
@@ -377,7 +374,6 @@ def mark_items_unavailable(
     changed_by_id: UUID,
     notes: Optional[str] = None,
 ) -> Order:
-    """Admin marca items no disponibles — pasa a partially_available."""
     if order.status != OrderStatus.pending:
         raise ValueError("Solo se pueden marcar items en pedidos pendientes")
 
@@ -391,7 +387,6 @@ def mark_items_unavailable(
             item.partial_cancellation_reason = "No disponible en proveedor"
             item.partial_cancelled_at = datetime.utcnow()
 
-    # Recalcular total con items disponibles
     available_items = db.query(OrderItem).filter(
         OrderItem.order_id == order.id,
         OrderItem.cancelled_in_partial == False,
@@ -426,12 +421,10 @@ def accept_partial_order(
     changed_by_id: UUID,
     notes: Optional[str] = None,
 ) -> Order:
-    """Cliente acepta o rechaza pedido parcial."""
     if order.status != OrderStatus.partially_available:
         raise ValueError("El pedido no esta en estado parcialmente disponible")
 
     if accept:
-        # Recalcular total con solo los items disponibles
         available_items = db.query(OrderItem).filter(
             OrderItem.order_id == order.id,
             OrderItem.cancelled_in_partial == False,

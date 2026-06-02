@@ -10,54 +10,42 @@ from app.modules.commissions.models import (
     CommissionSettings, CommissionPeriod, CommissionPeriodStatus
 )
 from app.modules.orders.models import Order, OrderItem
-from app.modules.shared_enums import OrderStatus
+from app.modules.shared_enums import OrderStatus, SaleType  # ── NUEVO: SaleType ──
 from app.modules.catalog.service import get_active_commission_percentage
 
 
-# ── Commission settings ───────────────────────────────────────────────────────
-
 def get_active_settings(db: Session) -> Optional[CommissionSettings]:
-    """Obtiene la configuracion de comisiones activa."""
     return db.query(CommissionSettings).filter(
         CommissionSettings.active_to.is_(None)
     ).order_by(CommissionSettings.active_from.desc()).first()
 
 
-# ── Calculos de semana ────────────────────────────────────────────────────────
-
 def get_week_bounds(reference_date: date) -> Tuple[date, date]:
-    """Obtiene el lunes y domingo de la semana que contiene reference_date."""
     week_start = reference_date - timedelta(days=reference_date.weekday())
     week_end = week_start + timedelta(days=6)
     return week_start, week_end
 
 
 def get_previous_week_bounds() -> Tuple[date, date]:
-    """Obtiene los limites de la semana anterior."""
     today = datetime.utcnow().date()
     last_week = today - timedelta(days=7)
     return get_week_bounds(last_week)
 
-
-# ── Calculo de comisiones ─────────────────────────────────────────────────────
 
 def calculate_commissions_for_week(
     db: Session,
     week_start: date,
     week_end: date,
 ) -> dict:
-    """
-    Calcula las comisiones de todos los vendedores para una semana especifica.
-    Busca pedidos delivered_to_client en esa semana y agrupa por vendedor.
-    """
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt = datetime.combine(week_end, datetime.max.time())
 
-    # Obtener pedidos entregados en la semana
+    # ── CAMBIO: excluir pedidos wholesale ──
     orders = db.query(Order).filter(
         Order.status == OrderStatus.delivered_to_client,
         Order.delivered_at >= week_start_dt,
         Order.delivered_at <= week_end_dt,
+        Order.sale_type != SaleType.wholesale,
     ).all()
 
     global_commission_pct = get_active_commission_percentage(db)
@@ -65,7 +53,6 @@ def calculate_commissions_for_week(
     periods_created = 0
     periods_updated = 0
 
-    # Agrupar por vendedor
     vendor_data = {}
     for order in orders:
         vid = order.vendor_id
@@ -85,15 +72,12 @@ def calculate_commissions_for_week(
         for item in items:
             vendor_data[vid]["gross_sales"] += item.sale_price_snapshot * item.quantity
             vendor_data[vid]["cost"] += item.cost_price_snapshot * item.quantity
-            # Recalcular comision desde cero — no usar snapshot que puede estar desactualizado
             item_gross_profit = (item.sale_price_snapshot - item.cost_price_snapshot) * item.quantity
             vendor_data[vid]["gross_profit_sum"] = vendor_data[vid].get("gross_profit_sum", Decimal("0")) + item_gross_profit
 
         vendor_data[vid]["shipping"] += order.shipping_cost or Decimal("0")
 
-    # Crear o actualizar commission_periods
     for vendor_id, data in vendor_data.items():
-        # Usar tasa individual del vendedor si existe, si no la global
         from app.modules.auth.models import Vendor as VendorModel
         vendor_obj = db.query(VendorModel).filter(VendorModel.id == vendor_id).first()
         commission_pct = (
@@ -103,7 +87,6 @@ def calculate_commissions_for_week(
         )
         vendors_processed.add(vendor_id)
         gross_profit = data["gross_sales"] - data["cost"]
-        # Recalcular comision desde cero usando gross_profit real y tasa del vendedor
         recalculated_commission = round(gross_profit * commission_pct / 100, 2)
         net_commission = recalculated_commission - data["shipping"]
 
@@ -149,14 +132,11 @@ def calculate_commissions_for_week(
     }
 
 
-# ── Confirmar pago ────────────────────────────────────────────────────────────
-
 def confirm_commission_payment(
     db: Session,
     period_id: UUID,
     notes: Optional[str] = None,
 ) -> Optional[CommissionPeriod]:
-    """Confirma el pago de una liquidacion semanal."""
     period = db.query(CommissionPeriod).filter(
         CommissionPeriod.id == period_id
     ).first()
@@ -176,8 +156,6 @@ def confirm_commission_payment(
     db.refresh(period)
     return period
 
-
-# ── Queries ───────────────────────────────────────────────────────────────────
 
 def get_commission_periods(
     db: Session,
@@ -199,25 +177,21 @@ def get_vendor_commission_summary(
     db: Session,
     vendor_id: UUID,
 ) -> dict:
-    """Resumen de comisiones del vendedor — semana actual y pendientes."""
     today = datetime.utcnow().date()
     week_start, week_end = get_week_bounds(today)
 
-    # Comision acumulada semana actual
     current_period = db.query(CommissionPeriod).filter(
         CommissionPeriod.vendor_id == vendor_id,
         CommissionPeriod.week_start == week_start,
     ).first()
     current_week_commission = current_period.net_commission if current_period else Decimal("0")
 
-    # Total pendiente de pago
     pending_periods = db.query(CommissionPeriod).filter(
         CommissionPeriod.vendor_id == vendor_id,
         CommissionPeriod.status == CommissionPeriodStatus.pending,
     ).all()
     pending_payment = sum(p.net_commission for p in pending_periods)
 
-    # Historial completo
     all_periods = get_commission_periods(db, vendor_id=vendor_id)
 
     return {

@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
-from app.modules.shared_enums import OrderStatus, FailureReason
+from app.modules.shared_enums import OrderStatus, FailureReason, SaleType  # ── NUEVO: SaleType
 
 
 # ── Request schemas ───────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ class CreateOrderRequest(BaseModel):
     delivery_address: Optional[str] = None
     notes: Optional[str] = None
     is_vendor_purchase: bool = False
-    client_id: Optional[UUID] = None  # Solo si vendor crea para un cliente de su red
+    client_id: Optional[UUID] = None
 
 
 class UpdateStatusRequest(BaseModel):
@@ -34,7 +34,7 @@ class MarkUnavailableRequest(BaseModel):
 
 
 class PartialAcceptRequest(BaseModel):
-    accept: bool  # True = acepta parcial, False = cancela todo
+    accept: bool
     notes: Optional[str] = None
 
 
@@ -86,6 +86,7 @@ class OrderResponse(BaseModel):
     vendor_id: UUID
     client_name: Optional[str] = None
     status: OrderStatus
+    sale_type: Optional[SaleType] = None  # ── NUEVO ──
     subtotal: Decimal
     shipping_cost: Decimal
     tax_amount: Decimal
@@ -115,6 +116,7 @@ class OrderListResponse(BaseModel):
     vendor_id: UUID
     client_name: Optional[str] = None
     status: OrderStatus
+    sale_type: Optional[SaleType] = None  # ── NUEVO ──
     total: Decimal
     is_vendor_purchase: bool
     vendor_notes: Optional[str] = None

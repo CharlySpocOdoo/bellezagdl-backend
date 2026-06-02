@@ -87,6 +87,42 @@ def update_vendor(
     return _vendor_to_response(vendor, user)
 
 
+
+@router_admin.get("/{vendor_id}/clients", response_model=List[ClientResponse])
+def get_vendor_clients_admin(
+    vendor_id: UUID,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Lista de clientes de un vendedor específico. Solo admin."""
+    vendor = service.get_vendor_by_id(db, vendor_id)
+    if not vendor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vendedor no encontrado",
+        )
+
+    clients = service.get_vendor_clients(db, vendor_id)
+    result = []
+    for client in clients:
+        user = db.query(User).filter(User.id == client.user_id).first()
+        result.append(ClientResponse(
+            id=client.id,
+            user_id=client.user_id,
+            first_name=client.first_name,
+            last_name=client.last_name,
+            email=user.email if user else "",
+            phone=client.phone,
+            delivery_address=client.delivery_address,
+            gender=client.gender,
+            birth_date=client.birth_date,
+            active=client.active,
+            last_order_at=client.last_order_at,
+            created_at=client.created_at,
+        ))
+    return result
+
+
 # ── Vendor endpoints ──────────────────────────────────────────────────────────
 
 @router_vendor.get("/me", response_model=VendorProfileResponse)
