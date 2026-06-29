@@ -7,16 +7,17 @@ from app.database import get_db
 from app.modules.auth.dependencies import get_current_user, require_admin
 from app.modules.auth.models import User, Vendor
 from app.modules.catalog import service
-from app.modules.catalog.models import ProductCategory, ProductVariant, ProductImage, Brand
+from app.modules.catalog.models import Product, ProductCategory, ProductVariant, ProductImage, Brand
 from app.modules.catalog.schemas import (
     ProductListResponse, ProductDetailResponse,
     CategoryResponse, BrandResponse,
     ProductVariantResponse, ProductImageResponse,
-    SyncResultResponse,
+    SyncResultResponse, UpdateOfertaRequest,
 )
 from app.modules.shared_enums import UserRole
 
 router = APIRouter()
+router_admin = APIRouter()
 
 
 @router.get("/products", response_model=List[ProductListResponse])
@@ -66,6 +67,7 @@ def get_products(
             )
             for v in variants
         ]
+        is_oferta_activa, precio_original = service.get_oferta_info(product, current_user.role)
         result.append(ProductListResponse(
             id=product.id,
             name=product.name,
@@ -79,6 +81,8 @@ def get_products(
             image_thumb_url=product.image_thumb_url,
             tags=product.tags,
             display_price=display_price,
+            is_oferta_activa=is_oferta_activa,
+            precio_original=precio_original,
             active=product.active,
             sku_template=product.sku_template,
             variants=variant_responses,
@@ -86,24 +90,9 @@ def get_products(
     return result
 
 
-@router.get("/products/{product_id}", response_model=ProductDetailResponse)
-def get_product_detail(
-    product_id: UUID,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Detalle completo de un producto con variantes e imagenes."""
-    vendor_id = None
-    if current_user.role == UserRole.vendor:
-        vendor = db.query(Vendor).filter(Vendor.user_id == current_user.id).first()
-        if vendor:
-            vendor_id = vendor.id
-
-    result = service.get_product_detail(db, product_id, current_user.role, vendor_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-
-    product, _, display_price = result
+def _build_product_detail_response(db: Session, product, role: UserRole) -> ProductDetailResponse:
+    display_price = service.get_display_price(db, product, role)
+    is_oferta_activa, precio_original = service.get_oferta_info(product, role)
 
     variants = service.get_variants(db, product.id)
     images = service.get_images(db, product.id)
@@ -151,14 +140,70 @@ def get_product_detail(
         image_thumb_url=product.image_thumb_url,
         tags=product.tags,
         display_price=display_price,
+        is_oferta_activa=is_oferta_activa,
+        precio_original=precio_original,
 
-        list_price=product.list_price if current_user.role == UserRole.admin else None,
-        cost_price=product.cost_price if current_user.role == UserRole.admin else None,
+        list_price=product.list_price if role == UserRole.admin else None,
+        cost_price=product.cost_price if role == UserRole.admin else None,
+        retail_price=product.retail_price if role == UserRole.admin else None,
+        modo_de_uso=product.modo_de_uso,
+        beneficios=product.beneficios,
+        ingredientes=product.ingredientes,
+        atributos=product.atributos,
         active=product.active,
         sku_template=product.sku_template,
         variants=variant_responses,
         images=image_responses,
     )
+
+
+@router.get("/products/{product_id}", response_model=ProductDetailResponse)
+def get_product_detail(
+    product_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Detalle completo de un producto con variantes e imagenes."""
+    vendor_id = None
+    if current_user.role == UserRole.vendor:
+        vendor = db.query(Vendor).filter(Vendor.user_id == current_user.id).first()
+        if vendor:
+            vendor_id = vendor.id
+
+    result = service.get_product_detail(db, product_id, current_user.role, vendor_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    product, _, _ = result
+    return _build_product_detail_response(db, product, current_user.role)
+
+
+@router_admin.patch("/{product_id}/oferta", response_model=ProductDetailResponse)
+def update_product_oferta(
+    product_id: UUID,
+    request: UpdateOfertaRequest,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Configura o desactiva la oferta de un producto. El request reemplaza por
+    completo el estado de oferta (no es un PATCH parcial) — para desactivar,
+    enviar los 4 campos en null.
+    """
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    try:
+        service.update_oferta(
+            db, product,
+            request.oferta_inicio, request.oferta_fin,
+            request.precio_oferta, request.descuento_oferta_pct,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return _build_product_detail_response(db, product, current_user.role)
 
 
 @router.get("/categories", response_model=List[CategoryResponse])

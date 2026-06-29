@@ -120,7 +120,7 @@ def get_me(current_user: User = Depends(get_current_user), db: Session = Depends
         if vendor:
             profile_id = vendor.id
             display_name = vendor.display_name
-    elif current_user.role == UserRole.client:
+    elif current_user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
         if client:
             profile_id = client.id

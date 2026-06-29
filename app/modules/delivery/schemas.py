@@ -69,8 +69,6 @@ class ShipmentResponse(BaseModel):
     vendor_id: UUID
     order_count: int
     total_amount: Decimal
-    shipping_cost: Decimal
-    shipping_cost_waived: bool
     notes: Optional[str] = None
     delivered_at: Optional[datetime] = None
 

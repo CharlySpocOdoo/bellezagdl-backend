@@ -30,7 +30,7 @@ def create_order(
     db: Session = Depends(get_db),
 ):
     """Crea un pedido. Valida stock y calcula snapshots financieros."""
-    if current_user.role in [UserRole.admin, UserRole.oferta]:
+    if current_user.role == UserRole.admin:
         raise HTTPException(status_code=403, detail="Este rol no puede crear pedidos")
 
     if current_user.role == UserRole.vendor:
@@ -61,7 +61,6 @@ def create_order(
             client_id = client.id
 
         vendor_id = vendor.id
-        vendor_commission_pct = vendor.commission_percentage
 
     # ── NUEVO: caso wholesale ──
     elif current_user.role == UserRole.wholesale:
@@ -70,7 +69,6 @@ def create_order(
             raise HTTPException(status_code=404, detail="Cliente mayoreo no encontrado")
         client_id = client.id
         vendor_id = None          # pedidos wholesale no tienen vendedor
-        vendor_commission_pct = None
 
     else:  # client
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
@@ -78,8 +76,6 @@ def create_order(
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
         client_id = client.id
         vendor_id = client.vendor_id
-        vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
-        vendor_commission_pct = vendor.commission_percentage if vendor else None
 
     items_data = [
         {"variant_id": item.variant_id, "quantity": item.quantity}
@@ -96,7 +92,6 @@ def create_order(
             delivery_address=request.delivery_address,
             notes=request.notes,
             is_vendor_purchase=request.is_vendor_purchase,
-            vendor_commission_pct=vendor_commission_pct,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -113,7 +108,7 @@ def list_orders(
     db: Session = Depends(get_db),
 ):
     """Lista pedidos segun rol. Client ve los suyos, vendor los de su red."""
-    if current_user.role == UserRole.client:
+    if current_user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
         if not client:
             return []
@@ -143,7 +138,7 @@ def get_order(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     # Verificar acceso segun rol
-    if current_user.role == UserRole.client:
+    if current_user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
         if not client or order.client_id != client.id:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
@@ -170,7 +165,7 @@ def update_order_status(
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     # Verificar acceso
-    if current_user.role == UserRole.client:
+    if current_user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
         if not client or order.client_id != client.id:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
@@ -241,7 +236,7 @@ def partial_accept(
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
-    if current_user.role == UserRole.client:
+    if current_user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == current_user.id).first()
         if not client or order.client_id != client.id:
             raise HTTPException(status_code=403, detail="No tienes acceso a este pedido")
@@ -332,7 +327,6 @@ def _order_to_response(db: Session, order: Order) -> OrderResponse:
         status=order.status,
         sale_type=order.sale_type, 
         subtotal=order.subtotal,
-        shipping_cost=order.shipping_cost,
         tax_amount=order.tax_amount,
         total=order.total,
         original_total=order.original_total,
@@ -359,7 +353,6 @@ def _order_to_response(db: Session, order: Order) -> OrderResponse:
                 unit_price=item.unit_price,
                 quantity=item.quantity,
                 subtotal=item.subtotal,
-                commission_amount_snapshot=item.commission_amount_snapshot,
                 cancelled_in_partial=item.cancelled_in_partial,
             ) for item in items
         ],

@@ -9,9 +9,7 @@ from sqlalchemy import func
 from app.modules.auth.models import User, Vendor, Client
 from app.modules.catalog.models import Product, ProductVariant, Brand
 from app.modules.catalog.service import (
-    calculate_sale_price, calculate_vendor_price,
     calculate_gross_profit, get_active_commission_percentage,
-    calculate_vendor_commission,  # ── NUEVO ──
 )
 from app.modules.orders.models import Order, OrderItem, OrderStatusHistory, Shipment
 from app.modules.commissions.models import CommissionPeriod, CommissionSettings
@@ -110,32 +108,21 @@ def calculate_item_prices(
     db: Session,
     variant: ProductVariant,
     quantity: int,
-    sale_type: SaleType,  # ── NUEVO: reemplaza is_vendor_purchase ──
-    vendor_commission_pct: Optional[Decimal] = None,
+    sale_type: SaleType,
 ) -> dict:
     product = db.query(Product).filter(Product.id == variant.product_id).first()
 
     cost_price = variant.cost_price_override or product.cost_price
     list_price = product.list_price
-    sale_price = calculate_sale_price(list_price)  # ── CAMBIO: antes pasaba cost_price y margen ──
+    sale_price = product.retail_price
 
-    commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
-
-    # ── CAMBIO: comisión sobre (sale_price - list_price) ──
-    if sale_type == SaleType.wholesale:
-        unit_price = list_price
-        commission_amount = Decimal("0.00")
-    else:
-        commission_amount = round(
-            calculate_vendor_commission(sale_price, list_price, commission_pct) * quantity, 2
-        )
-        unit_price = sale_price
+    # La comision del vendedor ya no se calcula por item — ver _register_vendor_commission
+    unit_price = list_price if sale_type == SaleType.wholesale else sale_price
 
     return {
         "cost_price_snapshot": cost_price,
         "sale_price_snapshot": sale_price,
         "unit_price": unit_price,
-        "commission_amount_snapshot": commission_amount,
         "subtotal": round(unit_price * quantity, 2),
         "product_name_snapshot": product.name,
         "variant_name_snapshot": variant.variant_name,
@@ -154,7 +141,6 @@ def create_order(
     delivery_address: Optional[str] = None,
     notes: Optional[str] = None,
     is_vendor_purchase: bool = False,
-    vendor_commission_pct: Optional[Decimal] = None,
 ) -> Order:
     # ── NUEVO: determinar sale_type según rol ──
     sale_type = SaleType.wholesale if role == UserRole.wholesale else SaleType.retail
@@ -176,8 +162,7 @@ def create_order(
         ).first()
 
         prices = calculate_item_prices(
-            db, variant, item["quantity"],
-            sale_type, vendor_commission_pct,  # ── CAMBIO: pasa sale_type ──
+            db, variant, item["quantity"], sale_type,
         )
         prices["variant_id"] = variant.id
         prices["product_id"] = variant.product_id
@@ -192,7 +177,6 @@ def create_order(
         status=OrderStatus.pending,
         sale_type=sale_type,  # ── NUEVO ──
         subtotal=subtotal,
-        shipping_cost=Decimal("0.00"),
         tax_amount=Decimal("0.00"),
         total=subtotal,
         delivery_address=delivery_address,
@@ -216,7 +200,6 @@ def create_order(
             unit_price=item_data["unit_price"],
             quantity=item_data["quantity"],
             subtotal=item_data["subtotal"],
-            commission_amount_snapshot=item_data["commission_amount_snapshot"],
             cancelled_in_partial=False,
         )
         db.add(order_item)
@@ -309,11 +292,14 @@ def _record_status_change(
 
 
 def _register_vendor_commission(db: Session, order: Order) -> None:
-    """Registra la comision del vendedor al llegar a delivered_to_client."""
+    """
+    Registra la comision del vendedor al llegar a delivered_to_client.
+    Formula: commission = order.total * commission_rate / 100 — ya no depende
+    de ningun precio de producto (retail_price/list_price), solo del total del pedido.
+    """
     from app.modules.commissions.models import CommissionPeriod, CommissionPeriodStatus
     from datetime import timedelta
 
-    # ── NUEVO: pedidos wholesale no generan comisión ──
     if order.sale_type == SaleType.wholesale:
         return
 
@@ -322,7 +308,6 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
         OrderItem.cancelled_in_partial == False,
     ).all()
 
-    total_commission = sum(item.commission_amount_snapshot or Decimal("0") for item in items)
     gross_sales = sum(item.sale_price_snapshot * item.quantity for item in items)
     cost_amount = sum(item.cost_price_snapshot * item.quantity for item in items)
 
@@ -342,12 +327,14 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
         else get_active_commission_percentage(db)
     )
 
+    commission_amount = round(order.total * commission_pct / 100, 2)
+
     if period:
         period.gross_sales_amount += gross_sales
         period.cost_amount += cost_amount
-        period.commission_base_amount += (gross_sales - cost_amount)
-        period.commission_amount += total_commission
-        period.net_commission += total_commission
+        period.commission_base_amount += order.total
+        period.commission_amount += commission_amount
+        period.net_commission += commission_amount
     else:
         period = CommissionPeriod(
             vendor_id=order.vendor_id,
@@ -355,11 +342,10 @@ def _register_vendor_commission(db: Session, order: Order) -> None:
             week_end=week_end,
             gross_sales_amount=gross_sales,
             cost_amount=cost_amount,
-            commission_base_amount=gross_sales - cost_amount,
+            commission_base_amount=order.total,
             commission_rate=commission_pct,
-            commission_amount=total_commission,
-            shipping_charges=Decimal("0.00"),
-            net_commission=total_commission,
+            commission_amount=commission_amount,
+            net_commission=commission_amount,
             status=CommissionPeriodStatus.pending,
         )
         db.add(period)
@@ -398,7 +384,7 @@ def mark_items_unavailable(
     order.original_total = order.total
     new_subtotal = sum(item.subtotal for item in available_items)
     order.subtotal = new_subtotal
-    order.total = new_subtotal + order.shipping_cost + order.tax_amount
+    order.total = new_subtotal + order.tax_amount
 
     old_status = order.status
     order.status = OrderStatus.partially_available
@@ -431,7 +417,7 @@ def accept_partial_order(
         ).all()
         new_subtotal = sum(item.subtotal for item in available_items)
         order.subtotal = new_subtotal
-        order.total = new_subtotal + order.shipping_cost + order.tax_amount
+        order.total = new_subtotal + order.tax_amount
 
         order.partial_accepted_at = datetime.utcnow()
         new_status = OrderStatus.confirmed

@@ -29,7 +29,6 @@ class CommissionSettings(Base):
     id                                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     commission_percentage               = Column(Numeric(5, 2), nullable=False)
     commission_base                     = Column(SAEnum(CommissionBase), nullable=True)
-    min_shipment_amount_for_free_shipping = Column(Numeric(10, 2), nullable=True)
     active_from                         = Column(DateTime, nullable=False, default=datetime.utcnow)
     active_to                           = Column(DateTime, nullable=True)
 
@@ -46,7 +45,6 @@ class CommissionPeriod(Base):
     commission_base_amount = Column(Numeric(10, 2), default=0, nullable=False)
     commission_rate        = Column(Numeric(5, 2), nullable=False)
     commission_amount      = Column(Numeric(10, 2), default=0, nullable=False)
-    shipping_charges       = Column(Numeric(10, 2), default=0, nullable=False)
     net_commission         = Column(Numeric(10, 2), default=0, nullable=False)
     status                 = Column(SAEnum(CommissionPeriodStatus), nullable=False, default=CommissionPeriodStatus.pending)
     confirmed_at           = Column(DateTime, nullable=True)

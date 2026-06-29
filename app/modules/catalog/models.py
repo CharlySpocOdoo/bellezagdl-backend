@@ -4,7 +4,7 @@ from sqlalchemy import (
     Column, String, Boolean, Integer, Numeric,
     DateTime, ForeignKey, Text
 )
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import Enum as SAEnum
 
@@ -60,6 +60,19 @@ class Product(Base):
     description       = Column(Text, nullable=True)
     list_price        = Column(Numeric(10, 2), nullable=False)
     cost_price        = Column(Numeric(10, 2), nullable=False)
+    retail_price      = Column(Numeric(10, 2), nullable=True)
+    modo_de_uso       = Column(Text, nullable=True)
+    beneficios        = Column(Text, nullable=True)
+    ingredientes      = Column(Text, nullable=True)
+    atributos         = Column(JSONB, nullable=True)
+    # Oferta con vigencia por fecha — distinta del rol "oferta" eliminado en
+    # Prioridad 0 (ese era un catalogo especial para un rol descontinuado;
+    # esto es un descuento temporal sobre client/vendor). No hay booleano de
+    # estado: "activa" se calcula en cada consulta comparando con la hora actual.
+    oferta_inicio        = Column(DateTime, nullable=True)
+    oferta_fin           = Column(DateTime, nullable=True)
+    precio_oferta        = Column(Numeric(10, 2), nullable=True)
+    descuento_oferta_pct = Column(Numeric(5, 2), nullable=True)
     image_url         = Column(Text, nullable=True)
     image_thumb_url   = Column(Text, nullable=True)
     active            = Column(Boolean, default=True)
@@ -70,8 +83,6 @@ class Product(Base):
     source_updated_at = Column(DateTime, nullable=True)
     tags              = Column(ARRAY(String), nullable=True)
     sku_template      = Column(String(100), nullable=True)
-    disponible_oferta = Column(Boolean, default=False, nullable=True)
-    precio_oferta     = Column(Numeric(10, 2), nullable=True)
 
     category          = relationship("ProductCategory", back_populates="products")
     brand             = relationship("Brand", back_populates="products")

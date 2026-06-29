@@ -6,7 +6,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.modules.orders.models import Order, OrderItem, Shipment
+from app.modules.orders.models import Order, OrderItem
 from app.modules.commissions.models import CommissionPeriod, CommissionPeriodStatus
 from app.modules.auth.models import Vendor
 from app.modules.catalog.models import Product, ProductVariant
@@ -52,7 +52,7 @@ def get_financial_report(
         order_sale_type = {o.id: o.sale_type for o in orders}
 
         for item in items:
-            item_revenue = item.sale_price_snapshot * item.quantity
+            item_revenue = item.unit_price * item.quantity
             item_cost = item.cost_price_snapshot * item.quantity
             gross_revenue += item_revenue
             total_cost += item_cost
@@ -85,17 +85,7 @@ def get_financial_report(
     commissions = commissions_query.all()
     commissions_paid = sum(c.net_commission for c in commissions)
 
-    shipments_query = db.query(Shipment).filter(
-        Shipment.delivered_at >= from_dt,
-        Shipment.delivered_at <= to_dt,
-        Shipment.shipping_cost_waived == False,
-    )
-    if vendor_id:
-        shipments_query = shipments_query.filter(Shipment.vendor_id == vendor_id)
-    shipments = shipments_query.all()
-    shipping_costs = sum(s.shipping_cost for s in shipments)
-
-    net_profit = gross_profit - commissions_paid - shipping_costs - tax_amount
+    net_profit = gross_profit - commissions_paid - tax_amount
     gross_margin_pct = round(
         (gross_profit / gross_revenue * 100) if gross_revenue > 0 else Decimal("0"), 2
     )
@@ -117,7 +107,6 @@ def get_financial_report(
         "total_cost": total_cost,
         "gross_profit": gross_profit,
         "commissions_paid": commissions_paid,
-        "shipping_costs": shipping_costs,
         "tax_amount": tax_amount,
         "net_profit": net_profit,
         "gross_margin_pct": gross_margin_pct,

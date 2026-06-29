@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Tuple
 from uuid import UUID
@@ -14,34 +15,9 @@ from app.modules.shared_enums import UserRole
 
 # ── Calculos de precio ────────────────────────────────────────────────────────
 
-def calculate_sale_price(list_price: Decimal) -> Decimal:
-    """
-    Precio Venta = Precio Lista x 1.50
-    ── CAMBIO: antes recibía cost_price y sale_margin — ahora solo list_price ──
-    """
-    return round(list_price * Decimal("1.50"), 2)
-
-
 def calculate_gross_profit(sale_price: Decimal, cost_price: Decimal) -> Decimal:
     """Ganancia bruta = Precio Venta - Precio Costo."""
     return sale_price - cost_price
-
-
-def calculate_vendor_commission(sale_price: Decimal, list_price: Decimal, commission_pct: Decimal) -> Decimal:
-    """
-    Comision vendedor = (sale_price - list_price) × commission_rate
-    ── CAMBIO: antes se calculaba sobre gross_profit (sale_price - cost_price) ──
-    """
-    return round((sale_price - list_price) * commission_pct / 100, 2)
-
-
-def calculate_vendor_price(sale_price: Decimal, list_price: Decimal, commission_pct: Decimal) -> Decimal:
-    """
-    Precio Vendedor = sale_price - comision_vendedor
-    ── CAMBIO: comisión ahora se calcula sobre (sale_price - list_price) ──
-    """
-    commission = calculate_vendor_commission(sale_price, list_price, commission_pct)
-    return round(sale_price - commission, 2)
 
 
 def get_active_commission_percentage(db: Session) -> Decimal:
@@ -54,33 +30,98 @@ def get_active_commission_percentage(db: Session) -> Decimal:
     return Decimal("30.00")
 
 
+def oferta_esta_activa(product: Product) -> bool:
+    """
+    Una oferta esta activa si la hora actual cae entre oferta_inicio y
+    oferta_fin. No hay booleano de estado guardado — se calcula siempre al
+    momento de consultar. Si falta cualquiera de las dos fechas, se trata
+    como no activa (no se puede evaluar un rango incompleto).
+    """
+    if product.oferta_inicio is None or product.oferta_fin is None:
+        return False
+    ahora = datetime.utcnow()
+    return product.oferta_inicio <= ahora <= product.oferta_fin
+
+
+def get_precio_oferta(product: Product) -> Optional[Decimal]:
+    """
+    Precio de oferta si hay una activa, o None. precio_oferta tiene prioridad
+    sobre descuento_oferta_pct cuando ambos tienen valor.
+    """
+    if not oferta_esta_activa(product):
+        return None
+    if product.precio_oferta is not None:
+        return product.precio_oferta
+    if product.descuento_oferta_pct is not None:
+        return round(product.retail_price * (1 - product.descuento_oferta_pct / 100), 2)
+    return None
+
+
+def get_oferta_info(product: Product, role: UserRole) -> Tuple[bool, Optional[Decimal]]:
+    """
+    (is_oferta_activa, precio_original) para exponer en la API. Las ofertas
+    solo aplican a client/vendor — wholesale y admin nunca las ven, sin
+    importar si hay una oferta activa en el producto.
+    """
+    if role not in (UserRole.client, UserRole.vendor):
+        return False, None
+    if get_precio_oferta(product) is None:
+        return False, None
+    return True, product.retail_price
+
+
 def get_display_price(
     db: Session,
     product: Product,
     role: UserRole,
-    vendor_commission_pct: Optional[Decimal] = None,
 ) -> Decimal:
     """
     Devuelve el precio a mostrar segun el rol:
-    - Admin:     sale_price (list_price × 1.50)
-    - Client:    sale_price (list_price × 1.50)
-    - Vendor:    sale_price - comision sobre (sale_price - list_price)
-    - Wholesale: list_price  ── NUEVO ──
-    - Oferta:    precio_oferta
+    - Admin:     retail_price (viene directo de la BD — antes era list_price × 1.50)
+    - Client:    retail_price, o precio_oferta si hay una oferta activa
+    - Vendor:    igual que client — sin comision descontada (la comision ya no
+                 se calcula por producto, solo por pedido completo via order.total)
+    - Wholesale: list_price — nunca ve precio de oferta
     """
-    sale_price = calculate_sale_price(product.list_price)  # ── CAMBIO: antes usaba cost_price
-
-    if role == UserRole.wholesale:  # ── NUEVO ──
+    if role == UserRole.wholesale:
         return product.list_price
 
-    if role == UserRole.vendor:
-        commission_pct = vendor_commission_pct or get_active_commission_percentage(db)
-        return calculate_vendor_price(sale_price, product.list_price, commission_pct)
+    if role in (UserRole.client, UserRole.vendor):
+        precio_oferta = get_precio_oferta(product)
+        if precio_oferta is not None:
+            return precio_oferta
 
-    if role == UserRole.oferta:
-        return product.precio_oferta if product.precio_oferta else sale_price
+    return product.retail_price  # admin, o client/vendor sin oferta activa
 
-    return sale_price  # admin y client
+
+def update_oferta(
+    db: Session,
+    product: Product,
+    oferta_inicio: Optional[datetime],
+    oferta_fin: Optional[datetime],
+    precio_oferta: Optional[Decimal],
+    descuento_oferta_pct: Optional[Decimal],
+) -> Product:
+    """
+    Reemplaza por completo el estado de oferta del producto (no es un PATCH
+    parcial) — para desactivar una oferta, se deben enviar los 4 campos en
+    null explicitamente.
+    """
+    if oferta_inicio is not None and oferta_fin is not None:
+        if oferta_fin <= oferta_inicio:
+            raise ValueError("oferta_fin debe ser posterior a oferta_inicio")
+        if precio_oferta is None and descuento_oferta_pct is None:
+            raise ValueError(
+                "No se puede activar una oferta sin precio_oferta o descuento_oferta_pct"
+            )
+
+    product.oferta_inicio = oferta_inicio
+    product.oferta_fin = oferta_fin
+    product.precio_oferta = precio_oferta
+    product.descuento_oferta_pct = descuento_oferta_pct
+    db.commit()
+    db.refresh(product)
+    return product
 
 
 # ── Stock ─────────────────────────────────────────────────────────────────────
@@ -110,8 +151,6 @@ def get_products(
     search: Optional[str] = None,
 ) -> List[Tuple[Product, Decimal]]:
     query = db.query(Product).filter(Product.active == True)
-    if role == UserRole.oferta:
-        query = query.filter(Product.disponible_oferta == True)
 
     if category_id:
         query = query.filter(Product.category_id == category_id)
@@ -122,17 +161,9 @@ def get_products(
 
     products = query.order_by(Product.display_order, Product.name).all()
 
-    vendor_commission_pct = None
-    if role == UserRole.vendor and vendor_id:
-        vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
-        if vendor and vendor.commission_percentage:
-            vendor_commission_pct = vendor.commission_percentage
-        else:
-            vendor_commission_pct = get_active_commission_percentage(db)
-
     result = []
     for product in products:
-        display_price = get_display_price(db, product, role, vendor_commission_pct)
+        display_price = get_display_price(db, product, role)
         result.append((product, display_price))
 
     return result
@@ -152,19 +183,9 @@ def get_product_detail(
     if not product:
         return None
 
-    sale_price = calculate_sale_price(product.list_price)  # ── CAMBIO: antes usaba cost_price
+    display_price = get_display_price(db, product, role)
 
-    vendor_commission_pct = None
-    if role == UserRole.vendor and vendor_id:
-        vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
-        if vendor and vendor.commission_percentage:
-            vendor_commission_pct = vendor.commission_percentage
-        else:
-            vendor_commission_pct = get_active_commission_percentage(db)
-
-    display_price = get_display_price(db, product, role, vendor_commission_pct)
-
-    return product, sale_price, display_price
+    return product, product.retail_price, display_price
 
 
 def get_categories(db: Session) -> List[ProductCategory]:

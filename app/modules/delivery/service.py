@@ -111,34 +111,20 @@ def create_shipment(
         orders.append(order)
         total_amount += order.total
 
-    # Calcular costo de envio
-    # Por ahora: sin costo si el total supera $500, de lo contrario $50
-    # Esto se reemplazara con shipping_tiers cuando se definan las reglas
-    if total_amount >= Decimal("500.00"):
-        shipping_cost = Decimal("0.00")
-        shipping_cost_waived = True
-    else:
-        shipping_cost = Decimal("50.00")
-        shipping_cost_waived = False
-
     shipment = Shipment(
         delivery_person_id=delivery_person_id,
         vendor_id=vendor_id,
         delivered_at=datetime.utcnow(),
         order_count=len(orders),
         total_amount=total_amount,
-        shipping_cost=shipping_cost,
-        shipping_cost_waived=shipping_cost_waived,
         notes=notes,
     )
     db.add(shipment)
     db.flush()
 
-    # Vincular pedidos al shipment y actualizar shipping_cost
+    # Vincular pedidos al shipment
     for order in orders:
         order.shipment_id = shipment.id
-        order.shipping_cost = shipping_cost
-        order.total = order.subtotal + shipping_cost + order.tax_amount
         order.updated_at = datetime.utcnow()
 
     # Actualizar contador del repartidor

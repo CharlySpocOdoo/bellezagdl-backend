@@ -57,7 +57,6 @@ class OrderItemResponse(BaseModel):
     unit_price: Decimal
     quantity: int
     subtotal: Decimal
-    commission_amount_snapshot: Optional[Decimal] = None
     cancelled_in_partial: bool = False
     returned_quantity: Optional[int] = 0
     return_reason: Optional[str] = None
@@ -88,7 +87,6 @@ class OrderResponse(BaseModel):
     status: OrderStatus
     sale_type: Optional[SaleType] = None  # ── NUEVO ──
     subtotal: Decimal
-    shipping_cost: Decimal
     tax_amount: Decimal
     total: Decimal
     original_total: Optional[Decimal] = None

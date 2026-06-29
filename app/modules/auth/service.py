@@ -84,7 +84,7 @@ def get_profile_id(db: Session, user: User) -> Optional[UUID]:
     if user.role == UserRole.vendor:
         vendor = db.query(Vendor).filter(Vendor.user_id == user.id).first()
         return vendor.id if vendor else None
-    elif user.role == UserRole.client:
+    elif user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == user.id).first()
         return client.id if client else None
     return None
@@ -94,7 +94,7 @@ def get_display_name(db: Session, user: User) -> Optional[str]:
     if user.role == UserRole.vendor:
         vendor = db.query(Vendor).filter(Vendor.user_id == user.id).first()
         return vendor.display_name if vendor else None
-    elif user.role == UserRole.client:
+    elif user.role in (UserRole.client, UserRole.wholesale):
         client = db.query(Client).filter(Client.user_id == user.id).first()
         return f"{client.first_name} {client.last_name}" if client else None
     return "Administrador"

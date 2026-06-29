@@ -12,7 +12,6 @@ class CommissionSettingsResponse(BaseModel):
     id: UUID
     commission_percentage: Decimal
     commission_base: Optional[str] = None
-    min_shipment_amount_for_free_shipping: Optional[Decimal] = None
     active_from: datetime
     active_to: Optional[datetime] = None
 
@@ -30,7 +29,6 @@ class CommissionPeriodResponse(BaseModel):
     commission_base_amount: Decimal
     commission_rate: Decimal
     commission_amount: Decimal
-    shipping_charges: Decimal
     net_commission: Decimal
     status: CommissionPeriodStatus
     confirmed_at: Optional[datetime] = None

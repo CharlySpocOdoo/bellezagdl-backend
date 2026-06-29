@@ -37,10 +37,15 @@ def calculate_commissions_for_week(
     week_start: date,
     week_end: date,
 ) -> dict:
+    """
+    Recalcula desde cero las comisiones de la semana.
+    Formula: commission = sum(order.total) * commission_rate / 100 — la misma
+    formula que _register_vendor_commission() en orders/service.py, para que
+    este recalculo no pise el acumulado con un numero distinto.
+    """
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_end_dt = datetime.combine(week_end, datetime.max.time())
 
-    # ── CAMBIO: excluir pedidos wholesale ──
     orders = db.query(Order).filter(
         Order.status == OrderStatus.delivered_to_client,
         Order.delivered_at >= week_start_dt,
@@ -60,8 +65,7 @@ def calculate_commissions_for_week(
             vendor_data[vid] = {
                 "gross_sales": Decimal("0"),
                 "cost": Decimal("0"),
-                "commission": Decimal("0"),
-                "shipping": Decimal("0"),
+                "commission_base": Decimal("0"),
             }
 
         items = db.query(OrderItem).filter(
@@ -72,10 +76,8 @@ def calculate_commissions_for_week(
         for item in items:
             vendor_data[vid]["gross_sales"] += item.sale_price_snapshot * item.quantity
             vendor_data[vid]["cost"] += item.cost_price_snapshot * item.quantity
-            item_gross_profit = (item.sale_price_snapshot - item.cost_price_snapshot) * item.quantity
-            vendor_data[vid]["gross_profit_sum"] = vendor_data[vid].get("gross_profit_sum", Decimal("0")) + item_gross_profit
 
-        vendor_data[vid]["shipping"] += order.shipping_cost or Decimal("0")
+        vendor_data[vid]["commission_base"] += order.total
 
     for vendor_id, data in vendor_data.items():
         from app.modules.auth.models import Vendor as VendorModel
@@ -86,9 +88,9 @@ def calculate_commissions_for_week(
             else global_commission_pct
         )
         vendors_processed.add(vendor_id)
-        gross_profit = data["gross_sales"] - data["cost"]
-        recalculated_commission = round(gross_profit * commission_pct / 100, 2)
-        net_commission = recalculated_commission - data["shipping"]
+        commission_base = data["commission_base"]
+        recalculated_commission = round(commission_base * commission_pct / 100, 2)
+        net_commission = recalculated_commission
 
         existing = db.query(CommissionPeriod).filter(
             CommissionPeriod.vendor_id == vendor_id,
@@ -98,10 +100,9 @@ def calculate_commissions_for_week(
         if existing:
             existing.gross_sales_amount = data["gross_sales"]
             existing.cost_amount = data["cost"]
-            existing.commission_base_amount = gross_profit
+            existing.commission_base_amount = commission_base
             existing.commission_rate = commission_pct
             existing.commission_amount = recalculated_commission
-            existing.shipping_charges = data["shipping"]
             existing.net_commission = net_commission
             periods_updated += 1
         else:
@@ -111,10 +112,9 @@ def calculate_commissions_for_week(
                 week_end=week_end,
                 gross_sales_amount=data["gross_sales"],
                 cost_amount=data["cost"],
-                commission_base_amount=gross_profit,
+                commission_base_amount=commission_base,
                 commission_rate=commission_pct,
                 commission_amount=recalculated_commission,
-                shipping_charges=data["shipping"],
                 net_commission=net_commission,
                 status=CommissionPeriodStatus.pending,
             )

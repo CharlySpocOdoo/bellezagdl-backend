@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
@@ -71,6 +71,8 @@ class ProductListResponse(BaseModel):
     image_thumb_url: Optional[str] = None
     tags: Optional[List[str]] = None
     display_price: Decimal
+    is_oferta_activa: bool = False
+    precio_original: Optional[Decimal] = None
     active: bool
     sku_template: Optional[str] = None
     variants: List["ProductVariantResponse"] = []
@@ -79,9 +81,25 @@ class ProductListResponse(BaseModel):
         from_attributes = True
 
 class ProductDetailResponse(ProductListResponse):
-    list_price: Optional[Decimal] = None   # Solo visible para admin
-    cost_price: Optional[Decimal] = None   # Solo visible para admin
+    list_price: Optional[Decimal] = None    # Solo visible para admin
+    cost_price: Optional[Decimal] = None    # Solo visible para admin
+    retail_price: Optional[Decimal] = None  # Solo visible para admin
+    modo_de_uso: Optional[str] = None
+    beneficios: Optional[str] = None
+    ingredientes: Optional[str] = None
+    atributos: Optional[Dict[str, str]] = None
     images: List[ProductImageResponse] = []
+
+
+class UpdateOfertaRequest(BaseModel):
+    """
+    Define el estado completo de la oferta de un producto — no es un PATCH
+    parcial. Para desactivar una oferta, enviar los 4 campos en null.
+    """
+    oferta_inicio: Optional[datetime] = None
+    oferta_fin: Optional[datetime] = None
+    precio_oferta: Optional[Decimal] = None
+    descuento_oferta_pct: Optional[Decimal] = None
 
 
 class SyncResultResponse(BaseModel):

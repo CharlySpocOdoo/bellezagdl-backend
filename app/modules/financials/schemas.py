@@ -14,7 +14,6 @@ class FinancialReportResponse(BaseModel):
     total_cost: Decimal
     gross_profit: Decimal
     commissions_paid: Decimal
-    shipping_costs: Decimal
     tax_amount: Decimal
     net_profit: Decimal
     gross_margin_pct: Decimal

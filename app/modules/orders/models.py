@@ -27,7 +27,6 @@ class Order(Base):
     sale_type               = Column(SAEnum(SaleType), nullable=True, default=SaleType.retail)  # ── NUEVO
     subtotal                = Column(Numeric(10, 2), nullable=False)
     vendor_discount_amount  = Column(Numeric(10, 2), default=0)
-    shipping_cost           = Column(Numeric(10, 2), default=0)
     tax_amount              = Column(Numeric(10, 2), default=0)
     total                   = Column(Numeric(10, 2), nullable=False)
     original_total          = Column(Numeric(10, 2), nullable=True)
@@ -63,7 +62,6 @@ class OrderItem(Base):
     unit_price                  = Column(Numeric(10, 2), nullable=False)
     quantity                    = Column(Integer, nullable=False)
     subtotal                    = Column(Numeric(10, 2), nullable=False)
-    commission_amount_snapshot  = Column(Numeric(10, 2), nullable=True)
     cancelled_in_partial        = Column(Boolean, default=False)
     partial_cancellation_reason = Column(Text, nullable=True)
     partial_cancelled_at        = Column(DateTime, nullable=True)
@@ -100,8 +98,6 @@ class Shipment(Base):
     delivered_at         = Column(DateTime, nullable=True)
     order_count          = Column(Integer, default=0)
     total_amount         = Column(Numeric(10, 2), default=0)
-    shipping_cost        = Column(Numeric(10, 2), default=0)
-    shipping_cost_waived = Column(Boolean, default=False)
     notes                = Column(Text, nullable=True)
     wholesale_client_id  = Column(UUID(as_uuid=True), ForeignKey("clients.id"), nullable=True)          # ── NUEVO
     sale_type            = Column(SAEnum(SaleType), nullable=True)                                       # ── NUEVO
